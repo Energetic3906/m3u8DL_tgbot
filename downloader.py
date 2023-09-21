@@ -17,7 +17,7 @@ def ytdl_download(url: str, tempdir: str):
     if url.endswith('.m3u8'):
         try:
             # Build download command as argument list
-            download_command = ["./N_m3u8DL-RE", url, "--save-dir", tempdir]
+            download_command = ["./N_m3u8DL-RE", url, "--save-dir", tempdir, "--no-log"]
             print("N_m3u8DL is being used to download videos in m3u8 format: ", url)
             # Execute download command
             subprocess.run(download_command, check=True)
