@@ -36,7 +36,7 @@ def handle_message(client: Client, message: types.Message):
     if user_message.startswith("https://") or user_message.startswith("http://"):
         try:
             # Create a temporary directory for the downloaded video
-            temp_dir = "/tmp/m3u8D/cache"  # Replace with your temporary directory path
+            temp_dir = "/tmp/m3u8DL_tgbot/cache"  # Replace with your temporary directory path
             os.makedirs(temp_dir, exist_ok=True)
 
             # Tell the user that the url has been added to the download queue.
