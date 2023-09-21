@@ -6,23 +6,77 @@ import ffmpeg
 import uuid
 import time
 import random
+import tempfile
 import fakeredis
 from pathlib import Path
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
+from pyrogram import Client, filters, types, enums
 from io import StringIO
 from tqdm import tqdm
 
 
-def ytdl_download(url: str, tempdir: str):
+def download_and_upload_video(user_client, client, message, user_message, base_save_dir):
+    try:
+
+        save_dir = tempfile.mkdtemp(dir=base_save_dir)
+        # Download the video
+        video_paths = ytdl_download(user_message, save_dir)
+        markup = gen_video_markup()
+        chat_id = message.chat.id
+        
+        # Send the downloaded video to the user
+        for video_path in video_paths:
+            video_path_str = str(video_path)
+            print("video_paths: ", video_path_str)
+            cap, meta = gen_cap(message, user_message, video_path_str)
+            print("cap: ", cap)
+            print("meta: ", meta)
+            user_client.send_video(
+                chat_id,
+                video_path_str,
+                caption=cap,
+                progress=upload_hook,
+                progress_args=(message,),
+                reply_markup=markup,
+                **meta
+            )
+
+        message.edit_text(f"Download success!✅✅✅")   
+
+        # Delete all files and subdirectories
+        for item in os.listdir(save_dir):
+            item_path = os.path.join(save_dir, item)
+            try:
+                if os.path.isfile(item_path):
+                    os.remove(item_path)
+                elif os.path.isdir(item_path):
+                    shutil.rmtree(item_path)
+            except Exception as e:
+                logging.error(f"Failed to delete {item_path}: {str(e)}")   
+        
+        # Delete directory
+        try:
+            os.rmdir(save_dir)
+        except OSError as e:
+            if e.errno == errno.ENOTEMPTY:
+                pass  # If the directory is not empty, you can proceed further or report an error
+            else:
+                raise  # If other errors occur, throw an exception
+        
+    except Exception as e:
+        client.send_message(chat_id, f"Download failed: {str(e)}")
+
+def ytdl_download(url: str, savedir: str):
+    tempdir = "/tmp/m3u8D/downloading"
     if url.endswith('.m3u8'):
         try:
             # Build download command as argument list
-            download_command = ["./N_m3u8DL-RE", url, "--save-dir", tempdir, "--no-log"]
+            download_command = ["./N_m3u8DL-RE", url,"--tmp-dir", tempdir,  "--save-dir", savedir, "--no-log", "--binary-merge"]
             print("N_m3u8DL is being used to download videos in m3u8 format: ", url)
             # Execute download command
             subprocess.run(download_command, check=True)
             # Get the downloaded file list
-            video_paths = list(pathlib.Path(tempdir).glob("*"))
+            video_paths = list(pathlib.Path(savedir).glob("*"))
 
             
             # Test code: print downloaded video file list
