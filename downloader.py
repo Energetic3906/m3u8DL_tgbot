@@ -70,8 +70,18 @@ def ytdl_download(url: str, savedir: str):
     tempdir = "/tmp/m3u8D/downloading"
     if url.endswith('.m3u8'):
         try:
+            # Generate random UUID as save file name
+            random_save_name = f"{uuid.uuid4().hex}"
             # Build download command as argument list
-            download_command = ["./N_m3u8DL-RE", url,"--tmp-dir", tempdir,  "--save-dir", savedir, "--no-log", "--binary-merge"]
+            download_command = [
+                "./N_m3u8DL-RE",
+                url,
+                "--tmp-dir", tempdir,
+                "--save-dir", savedir,
+                "--save-name", random_save_name,  # Use a randomly generated UUID as the save file name
+                "--no-log",
+                "--binary-merge"
+            ]
             print("N_m3u8DL is being used to download videos in m3u8 format: ", url)
             # Execute download command
             subprocess.run(download_command, check=True)
