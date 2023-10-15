@@ -68,33 +68,33 @@ def download_and_upload_video(user_client, client, message, user_message, base_s
 
 def ytdl_download(url: str, savedir: str):
     tempdir = "/tmp/m3u8D/downloading"
-    if url.endswith('.m3u8'):
-        try:
-            # Generate random UUID as save file name
-            random_save_name = f"{uuid.uuid4().hex}"
-            # Build download command as argument list
-            download_command = [
-                "./N_m3u8DL-RE",
-                url,
-                "--tmp-dir", tempdir,
-                "--save-dir", savedir,
-                "--save-name", random_save_name,  # Use a randomly generated UUID as the save file name
-                "--no-log",
-                "--binary-merge"
-            ]
-            print("N_m3u8DL is being used to download videos in m3u8 format: ", url)
-            # Execute download command
-            subprocess.run(download_command, check=True)
-            # Get the downloaded file list
-            video_paths = list(pathlib.Path(savedir).glob("*"))
+    try:
+        # Generate random UUID as save file name
+        random_save_name = f"{uuid.uuid4().hex}"
+        # Build download command as argument list
+        download_command = [
+            "./N_m3u8DL-RE",
+            url,
+            "--tmp-dir", tempdir,
+            "--save-dir", savedir,
+            "--save-name", random_save_name,  # Use a randomly generated UUID as the save file name
+            "--no-log",
+            "--auto-select",
+            "--binary-merge"
+        ]
+        print("N_m3u8DL is being used to download videos in m3u8 format: ", url)
+        # Execute download command
+        subprocess.run(download_command, check=True)
+        # Get the downloaded file list
+        video_paths = list(pathlib.Path(savedir).glob("*"))
 
-            
-            # Test code: print downloaded video file list
-            for video_path in video_paths:
-                print(f"Download completed: {video_path}")
-            return video_paths
-        except Exception as e:
-            raise Exception(f" N_m3u8DL Download failed for m3u8 URL: {url} - {str(e)}")
+        
+        # Test code: print downloaded video file list
+        for video_path in video_paths:
+            print(f"Download completed: {video_path}")
+        return video_paths
+    except Exception as e:
+        raise Exception(f" N_m3u8DL Download failed for m3u8 URL: {url} - {str(e)}")
 
 def gen_cap(bm, url, video_path):
     video_path = Path(video_path)
