@@ -83,3 +83,8 @@ Finally, run:
 ```shell
 python3 main.py
 ```
+
+
+## Quote
+
+This project is mainly based on [N_m3u8DL-RE](https://github.com/nilaoda/N_m3u8DL-RE) for secondary development, please follow the relevant agreement. Thanks to [nilaoda](https://github.com/nilaoda).
