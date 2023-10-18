@@ -2,6 +2,12 @@
 
 > "Premium" refers to premium users of Telegram, who have the capability to download files larger than 2 GB.
 
+## Configure the running environment
+
+```shell
+pip install pyrogram ffmpeg-python tqdm fakeredis tgcrypto && sudo apt-get install -y ffmpeg
+```
+
 ## How to Use Premium Features
 
 To begin with, you need to obtain an `app_user`. Here are the steps:

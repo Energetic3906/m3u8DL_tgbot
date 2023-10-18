@@ -1,6 +1,12 @@
 [English](https://github.com/rule-airport/m3u8DL_tgbot/blob/main/README.md)
 > premium 指的是 telegram 的 premium 用户。为了下载超过 2G 的文件。
 
+## 配置运行环境
+
+```shell
+pip install pyrogram ffmpeg-python tqdm fakeredis tgcrypto && sudo apt-get install -y ffmpeg
+```
+
 ## premium 用户使用
 
 首先获得 app_user
