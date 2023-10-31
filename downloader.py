@@ -88,7 +88,18 @@ def ytdl_download(url: str, savedir: str):
         # Get the downloaded file list
         video_paths = list(pathlib.Path(savedir).glob("*"))
 
-        
+        for video_path in video_paths:
+            # Check if the file is already in MP4 format
+            if video_path.suffix.lower() != ".mp4":
+                new_file_path = video_path.with_suffix(".mp4")
+                # Build FFmpeg command for video format conversion
+                subprocess.run(["ffmpeg", "-i", video_path, "-c:v", "copy", "-c:a", "copy", new_file_path], check=True)
+                # Delete the original non-MP4 format video
+                video_path.unlink()
+                # Update the video_paths list
+                video_paths.remove(video_path)  # Remove the deleted file from the list
+                video_paths.append(new_file_path)  # Add the converted MP4 file
+
         # Test code: print downloaded video file list
         for video_path in video_paths:
             print(f"Download completed: {video_path}")
