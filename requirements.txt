@@ -1,0 +1,6 @@
+ffmpeg-python
+uuid
+tqdm
+pyrogram
+fakeredis
+tgcrypto

@@ -5,15 +5,21 @@ from pyrogram import Client, filters, types, enums
 from downloader import download_and_upload_video
 
 # Initialize the Pyrogram client
-# api_id =   # Replace with your actual api_id
-# api_hash = ""  # Replace with your actual api_hash
-# bot_token = ""  # Replace with your actual bot_token
-# phone_number = ""  # Replace with your actual phone number
+api_id =  os.environ.get("APP_ID") # Replace with your actual api_id
+api_hash = os.environ.get("APP_HASH")  # Replace with your actual api_hash
+bot_token = os.environ.get("TOKEN")  # Replace with your actual bot_token
 
 app_user = Client("app_user")
-app = Client("ytdl-main")
+# app = Client("ytdl-main")
+app = Client("ytdl-main", api_id=api_id, api_hash=api_hash, bot_token=bot_token)
 # Only authenticated users can use the bot and enter the account ID.
-AUTHORIZED_USERS = [userid,userid-2]
+authorized_users_env = os.environ.get("AUTHORIZED_USERS")
+
+# 将环境变量值解析为实际的用户ID列表
+AUTHORIZED_USERS = [int(user_id) for user_id in authorized_users_env.split(",")] if authorized_users_env else []
+
+
+# AUTHORIZED_USERS = [userid,userid-2]
 
 @app.on_message(filters.command(["start"]))
 def start_handler(client: Client, message: types.Message):

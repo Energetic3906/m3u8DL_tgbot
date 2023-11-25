@@ -1,0 +1,14 @@
+version: '3'
+services:
+  ytdl:
+    container_name: m3u8dl-bot
+    image: povoma4617/m3u8dl-bot:latest
+    environment:
+      - APP_ID=<>
+      - APP_HASH=<>
+      - TOKEN=<>
+      - AUTHORIZED_USERS=<>
+    volumes: # if premium,set it
+      - /path/to/app_user.session:/app/app_user.session
+      - /path/to/ytdl-main.session:/app/ytdl-main.session
+    restart: always

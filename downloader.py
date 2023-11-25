@@ -16,13 +16,14 @@ from tqdm import tqdm
 
 
 def download_and_upload_video(user_client, client, message, user_message, base_save_dir):
-    try:
+    # Initialize chat_id variable
+    chat_id = message.chat.id
 
+    try:
         save_dir = tempfile.mkdtemp(dir=base_save_dir)
         # Download the video
         video_paths = ytdl_download(user_message, save_dir)
         markup = gen_video_markup()
-        chat_id = message.chat.id
         
         # Send the downloaded video to the user
         for video_path in video_paths:
