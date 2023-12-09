@@ -1,6 +1,7 @@
 docker-compose.yml
-build_log.txt
 Dockerfile
 README.md
 README_CN.md
 docker-compose.yml.default
+ytdl-main.session
+app_user.session
