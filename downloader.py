@@ -151,7 +151,7 @@ def get_metadata(video_path):
         logging.error(e)
     try:
         thumb = pathlib.Path(video_path).parent.joinpath(f"{uuid.uuid4().hex}-thunmnail.png").as_posix()
-        ffmpeg.input(video_path, ss=duration / 2).filter("scale", width, -1).output(thumb, vframes=1).run()
+        ffmpeg.input(video_path, ss=1).filter("scale", width, -1).output(thumb, vframes=1).run()
     except ffmpeg._run.Error:
         thumb = None
 

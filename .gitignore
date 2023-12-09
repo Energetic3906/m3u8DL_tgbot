@@ -4,3 +4,4 @@ main_use.py
 __pycache__/downloader.cpython-39.pyc
 app_user.session-journal
 ytdl-main.session-journal
+docker-compose.yml
