@@ -89,7 +89,9 @@ Finally, run:
 ```shell
 python3 main.py
 ```
+When creating, set `PREMIUM` to `False` inside the `docker-compose.yml`. Then, add only the second volume, which is:
 
+`- /path/to/ytdl-main.session:/app/ytdl-main.session`
 
 ## Quote
 

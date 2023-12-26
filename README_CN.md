@@ -75,6 +75,10 @@ app = Client("ytdl-main", api_id=api_id, api_hash=api_hash, bot_token=bot_token,
 python3 main.py
 ```
 
+创建的时候，`docker-comopse.yml` 里面的 PREMIUM 设置为 False。然后 volumes 只添加第二个，就是这个：
+
+`- /path/to/ytdl-main.session:/app/ytdl-main.session`
+
 ## 引用
 
 本项目主要基于 [N_m3u8DL-RE](https://github.com/nilaoda/N_m3u8DL-RE) 进行的二次开发，请遵循相关协议。感谢 [nilaoda](https://github.com/nilaoda) 
