@@ -10,7 +10,7 @@ api_hash = os.environ.get("APP_HASH")  # Replace with your actual api_hash
 bot_token = os.environ.get("TOKEN")  # Replace with your actual bot_token
 PREMIUM = os.environ.get("PREMIUM") == 'True'
 
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 logging.info("PREMIUM: " + str(PREMIUM))
 
 if PREMIUM:
