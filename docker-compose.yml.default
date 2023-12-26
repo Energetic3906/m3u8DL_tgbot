@@ -7,6 +7,7 @@ services:
       - APP_ID=<>
       - APP_HASH=<>
       - TOKEN=<>
+      - PREMIUM=False
       - AUTHORIZED_USERS=<>
     volumes: # if premium,set it
       - /path/to/app_user.session:/app/app_user.session

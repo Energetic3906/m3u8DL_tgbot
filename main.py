@@ -8,9 +8,13 @@ from downloader import download_and_upload_video
 api_id =  os.environ.get("APP_ID") # Replace with your actual api_id
 api_hash = os.environ.get("APP_HASH")  # Replace with your actual api_hash
 bot_token = os.environ.get("TOKEN")  # Replace with your actual bot_token
+PREMIUM = os.environ.get("PREMIUM") == 'True'
 
-app_user = Client("app_user")
-# app = Client("ytdl-main")
+logging.basicConfig(level=logging.DEBUG)
+logging.info("PREMIUM: " + str(PREMIUM))
+
+if PREMIUM:
+    app_user = Client("app_user")
 app = Client("ytdl-main", api_id=api_id, api_hash=api_hash, bot_token=bot_token)
 # Only authenticated users can use the bot and enter the account ID.
 authorized_users_env = os.environ.get("AUTHORIZED_USERS")
@@ -47,13 +51,18 @@ def handle_message(client: Client, message: types.Message):
         # Tell the user that the url has been added to the download queue.
         text = "Your task was added to active queue.\nProcessing...\n\n"
         bot_msg: typing.Union[types.Message, typing.Coroutine] = message.reply_text(text, quote=True)
-
-        download_and_upload_video(app_user, client, bot_msg, user_message, save_dir)
+        if PREMIUM:
+            download_and_upload_video(app_user, client, bot_msg, user_message, save_dir)
+        else:
+            download_and_upload_video(app, client, bot_msg, user_message, save_dir)
 
     else:
         client.send_message(chat_id, "Please provide a valid URL.")
 
 
 # Start client
-app_user.start()
-app.run()
+if PREMIUM:
+    app_user.start()
+    app.run()
+else:
+    app.run()
