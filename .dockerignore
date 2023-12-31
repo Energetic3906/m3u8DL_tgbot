@@ -1,7 +1,9 @@
-docker-compose.yml
-Dockerfile
-README.md
-README_CN.md
-docker-compose.yml.default
-ytdl-main.session
+.git
+.gitignore
 app_user.session
+docker-compose.yml
+docker-compose.yml.default
+Dockerfile
+README_CN.md
+README.md
+ytdl-main.session

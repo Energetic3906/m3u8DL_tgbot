@@ -1,6 +1,6 @@
 version: '3'
 services:
-  ytdl:
+  m3u8dl-bot:
     container_name: m3u8dl-bot
     image: povoma4617/m3u8dl-bot:latest
     environment:
