@@ -1,22 +1,20 @@
-[中文](https://github.com/rule-airport/m3u8DL_tgbot/blob/main/README_CN.md)
+[English](https://github.com/rule-airport/m3u8DL_tgbot/blob/main/README_EN.md)
 
-> "Premium" refers to premium users of Telegram, who have the capability to download files larger than 2 GB.
+> premium 指的是 telegram 的 premium 用户。为了下载超过 2G 的文件。
 
-## Configure the running environment
+## 配置运行环境
 
 ```shell
 pip install pyrogram ffmpeg-python tqdm fakeredis tgcrypto && sudo apt-get install -y ffmpeg
 ```
 
-## How to Use Premium Features
+## premium 用户使用
 
-To begin with, you need to obtain an `app_user`. Here are the steps:
-
-**Step 1:** Create a file named `get_session.py`:
+首先获得 app_user
+第一步新建 `get_session.py` ：
 
 ```python
 from pyrogram import Client, filters, types, enums
-
 api_id = 
 api_hash = "" 
 bot_token = ""
@@ -27,19 +25,14 @@ app_user = Client("app_user", api_id=api_id, api_hash=api_hash, phone_number=pho
 app_user.run()
 ```
 
-Run the following command in your terminal:
-
 ```shell
 python3 get_session.py
 ```
 
-You will be prompted to enter a verification code and your account password. After that, exit by pressing Ctrl+C.
-
-**Step 2:** Modify the `get_session.py` file:
+输入验证码和账号密码。然后 Ctrl+C 退出，然后修改 `get_session.py` ：
 
 ```python
 from pyrogram import Client, filters, types, enums
-
 api_id = 
 api_hash = "" 
 bot_token = ""
@@ -50,49 +43,43 @@ app = Client("ytdl-main", api_id=api_id, api_hash=api_hash, bot_token=bot_token,
 
 app_user.start()
 app.run()
-```
 
-Run the following command again:
+```
 
 ```shell
 python3 get_session.py
 ```
 
-Once this is done, two session files, `app_user.session` and `ytdl-main.session`, will be generated in your current directory. Now, in the `main.py` file, input your own account ID to create a private bot:
+运行之后，会在当前文件夹里面生成 `app_user.session` 和 `ytdl-main.session`，然后在 `main.py` 中输入自己的账户 ID，这样就可以生成私有 bot。
 
-```python
-AUTHORIZED_USERS = [user_id]
-```
+`AUTHORIZED_USERS = [user_id]`
 
-Finally, run:
+最后运行：
 
 ```shell
 python3 main.py
 ```
 
-## How Regular Users Can Use It
+## 普通用户使用
 
-For regular users, follow these steps:
+删除 `main.py` 中的 `app_user = Client("app_user")` ，`app_user.start()` ；将 `app_user.send_video` 修改为 `client.send_video`。
 
-1. Remove the lines `app_user = Client("app_user")` and `app_user.start()` in the `main.py` file.
-
-2. Change all instances of `app_user.send_video` to `client.send_video` in the `main.py` file.
-
-Modify the `main.py` file as follows:
+修改 `main.py` ：
 
 ```python
 app = Client("ytdl-main", api_id=api_id, api_hash=api_hash, bot_token=bot_token, ipv6=False)
 ```
 
-Finally, run:
+最后运行：
 
 ```shell
 python3 main.py
 ```
-When creating, set `PREMIUM` to `False` inside the `docker-compose.yml`. Then, add only the second volume, which is:
+
+创建的时候，`docker-comopse.yml` 里面的 PREMIUM 设置为 False。然后 volumes 只添加第二个，就是这个：
 
 `- /path/to/ytdl-main.session:/app/ytdl-main.session`
 
-## Quote
+## 引用
 
-This project is mainly based on [N_m3u8DL-RE](https://github.com/nilaoda/N_m3u8DL-RE) for secondary development, please follow the relevant agreement. Thanks to [nilaoda](https://github.com/nilaoda).
+本项目主要基于 [N_m3u8DL-RE](https://github.com/nilaoda/N_m3u8DL-RE) 进行的二次开发，请遵循相关协议。感谢 [nilaoda](https://github.com/nilaoda) 
