@@ -12,4 +12,5 @@ services:
     volumes: # if premium,set it
       - /path/to/app_user.session:/app/app_user.session
       - /path/to/ytdl-main.session:/app/ytdl-main.session
+      - /tmp/m3u8D:/tmp/m3u8D
     restart: always
