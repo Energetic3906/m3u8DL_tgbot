@@ -1,14 +1,14 @@
 # 构建阶段
-FROM python:3.11-slim-bookworm as builder
+FROM python:3.11-slim as builder
 ADD requirements.txt /tmp/
 RUN pip3 install --user --no-cache-dir -r /tmp/requirements.txt && rm /tmp/requirements.txt
 
 COPY docker /tmp/app
 
-RUN chmod +x /tmp/app/N_m3u8DL-RE
+RUN chmod +x /tmp/app/N_m3u8DL-RE /tmp/app/entry.sh
 
 # 最终阶段
-FROM python:3.11-slim-bookworm
+FROM python:3.11-slim
 
 # 设置工作目录
 WORKDIR /app
@@ -24,4 +24,4 @@ RUN apt-get update && \
     rm -rf /var/cache/apt/archives/*
 
 # 在容器中运行你的Python脚本
-CMD ["python3", "main.py"]
+ENTRYPOINT ["./entry.sh"]

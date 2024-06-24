@@ -2,15 +2,17 @@ version: '3'
 services:
   m3u8dl-bot:
     container_name: m3u8dl-bot
-    image: povoma4617/m3u8dl-bot:latest
+    build: .
     environment:
-      - APP_ID=<>
-      - APP_HASH=<>
-      - TOKEN=<>
+      - APP_ID=<your_app_id>
+      - APP_HASH=<your_app_hash>
+      - TOKEN=<your_bot_token>
       - PREMIUM=False
-      - AUTHORIZED_USERS=<>
-    volumes: # if premium,set it
-      - /path/to/app_user.session:/app/app_user.session
-      - /path/to/ytdl-main.session:/app/ytdl-main.session
+      - AUTHORIZED_USERS=<your_user_id>
+    volumes:
+      - ./sessions/ytdl-main.session:/app/ytdl-main.session
+      - ./sessions/app_user.session:/app/app_user.session
       - /tmp/m3u8D:/tmp/m3u8D
+    stdin_open: true
+    tty: true
     restart: always

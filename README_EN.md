@@ -2,96 +2,70 @@
 
 > "Premium" refers to premium users of Telegram, who have the capability to download files larger than 2 GB.
 
-## Configure the running environment
+## Quick Start (Docker Deployment)
+
+### 1. Initialize Configuration
+
+```shell
+# Copy configuration file
+cp docker-compose.yml.default docker-compose.yml
+
+# Create session storage directory
+mkdir -p sessions
+```
+
+### 2. Fill in Configuration
+
+Edit the environment variables in `docker-compose.yml`:
+
+```yaml
+environment:
+  - APP_ID=<your_app_id>
+  - APP_HASH=<your_app_hash>
+  - TOKEN=<your_bot_token>
+  - PREMIUM=False
+  - AUTHORIZED_USERS=<your_user_id, comma-separated for multiple>
+```
+
+### 3. First Run (Auto-create Session)
+
+```shell
+docker-compose run --rm m3u8dl-bot
+```
+
+On first run, the bot will automatically detect if sessions exist. If not, it will guide you through creation:
+
+- **Regular users**: Just enter your phone number to verify your Telegram account
+- **Premium users**: After phone verification, the app_user session will also be created for sending large files
+
+### 4. Normal Operation
+
+After sessions are created, startup no longer requires interaction:
+
+```shell
+# Run in background
+docker-compose up -d
+
+# View logs
+docker-compose logs -f
+```
+
+## Local Development
 
 ```shell
 pip install pyrogram ffmpeg-python tqdm fakeredis tgcrypto && sudo apt-get install -y ffmpeg
+python3 docker/main.py
 ```
 
-## How to Use Premium Features
+## Configuration Reference
 
-To begin with, you need to obtain an `app_user`. Here are the steps:
-
-**Step 1:** Create a file named `get_session.py`:
-
-```python
-from pyrogram import Client, filters, types, enums
-
-api_id = 
-api_hash = "" 
-bot_token = ""
-phone_number = "" 
-
-app_user = Client("app_user", api_id=api_id, api_hash=api_hash, phone_number=phone_number)
-
-app_user.run()
-```
-
-Run the following command in your terminal:
-
-```shell
-python3 get_session.py
-```
-
-You will be prompted to enter a verification code and your account password. After that, exit by pressing Ctrl+C.
-
-**Step 2:** Modify the `get_session.py` file:
-
-```python
-from pyrogram import Client, filters, types, enums
-
-api_id = 
-api_hash = "" 
-bot_token = ""
-phone_number = "" 
-
-app_user = Client("app_user", api_id=api_id, api_hash=api_hash, phone_number=phone_number)
-app = Client("ytdl-main", api_id=api_id, api_hash=api_hash, bot_token=bot_token, ipv6=False)
-
-app_user.start()
-app.run()
-```
-
-Run the following command again:
-
-```shell
-python3 get_session.py
-```
-
-Once this is done, two session files, `app_user.session` and `ytdl-main.session`, will be generated in your current directory. Now, in the `main.py` file, input your own account ID to create a private bot:
-
-```python
-AUTHORIZED_USERS = [user_id]
-```
-
-Finally, run:
-
-```shell
-python3 main.py
-```
-
-## How Regular Users Can Use It
-
-For regular users, follow these steps:
-
-1. Remove the lines `app_user = Client("app_user")` and `app_user.start()` in the `main.py` file.
-
-2. Change all instances of `app_user.send_video` to `client.send_video` in the `main.py` file.
-
-Modify the `main.py` file as follows:
-
-```python
-app = Client("ytdl-main", api_id=api_id, api_hash=api_hash, bot_token=bot_token, ipv6=False)
-```
-
-Finally, run:
-
-```shell
-python3 main.py
-```
-When creating, set `PREMIUM` to `False` inside the `docker-compose.yml`. Then, add only the second volume, which is:
-
-`- /path/to/ytdl-main.session:/app/ytdl-main.session`
+| Environment Variable | Description |
+|---------------------|-------------|
+| `APP_ID` | Telegram API ID |
+| `APP_HASH` | Telegram API Hash |
+| `TOKEN` | Telegram Bot Token |
+| `PREMIUM` | `True` to enable premium mode (supports files >2GB) |
+| `AUTHORIZED_USERS` | Authorized user IDs, comma-separated |
 
 ## Quote
 

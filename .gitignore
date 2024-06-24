@@ -5,3 +5,4 @@ __pycache__/downloader.cpython-39.pyc
 app_user.session-journal
 ytdl-main.session-journal
 docker-compose.yml
+CLAUDE.md
