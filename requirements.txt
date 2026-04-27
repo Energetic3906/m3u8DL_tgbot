@@ -4,3 +4,4 @@ tqdm
 pyrogram
 fakeredis
 tgcrypto
+yt-dlp

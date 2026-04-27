@@ -2,6 +2,13 @@
 
 > "Premium" refers to premium users of Telegram, who have the capability to download files larger than 2 GB.
 
+## Features
+
+- Direct m3u8 URL download support
+- Webpage URL support with automatic video detection (using yt-dlp)
+- Automatic MP4 conversion
+- Telegram Premium support for files >2GB
+
 ## Quick Start (Docker Deployment)
 
 ### 1. Initialize Configuration
@@ -10,7 +17,7 @@
 # Copy configuration file
 cp docker-compose.yml.default docker-compose.yml
 
-# Create session storage directory (persists login state across image updates)
+# Create session storage directory
 mkdir -p sessions
 ```
 
@@ -33,14 +40,7 @@ environment:
 docker-compose run --rm m3u8dl-bot
 ```
 
-On first run, the bot will automatically detect if sessions exist. If not, it will guide you through creation:
-
-- **Regular users**: Just enter your phone number to verify your Telegram account
-- **Premium users**: After phone verification, the app_user session will also be created for sending large files
-
 ### 4. Normal Operation
-
-After sessions are created, startup no longer requires interaction:
 
 ```shell
 # Run in background
@@ -50,31 +50,37 @@ docker-compose up -d
 docker-compose logs -f
 ```
 
-### 5. Updating the Image
+## Usage
 
-When updating the Docker image or restarting the service, session files in `./sessions/` are preserved - no re-login required:
+### Send direct m3u8 URL
 
-```shell
-# Pull new image
-docker-compose pull
+```
+https://example.com/video.m3u8
+```
 
-# Restart service (session preserved)
-docker-compose up -d
+### Send webpage URL (auto-detect video)
+
+Send any webpage URL containing video, bot will automatically detect and download using yt-dlp:
+
+```
+https://example.com/video-page.html
+```
+
+Caption format after download:
+```
+{title}
+
+{original_url}
 ```
 
 ## Session Persistence
 
-Session files are stored in the `sessions/` directory:
-
-| File | Description |
-|------|-------------|
-| `sessions/ytdl-main.session` | Bot session (required) |
-| `sessions/app_user.session` | User session (only needed when PREMIUM=True) |
+Session files are stored in `sessions/` directory and persist across image updates.
 
 ## Local Development
 
 ```shell
-pip install pyrogram ffmpeg-python tqdm fakeredis tgcrypto && sudo apt-get install -y ffmpeg
+pip install pyrogram ffmpeg-python tqdm fakeredis tgcrypto yt-dlp && sudo apt-get install -y ffmpeg
 python3 docker/main.py
 ```
 
@@ -87,6 +93,14 @@ python3 docker/main.py
 | `TOKEN` | Telegram Bot Token |
 | `PREMIUM` | `True` to enable premium mode (supports files >2GB) |
 | `AUTHORIZED_USERS` | Authorized user IDs, comma-separated |
+
+## Download Flow
+
+1. Receive URL, try yt-dlp first to check support
+2. If yt-dlp supports it, get title and download
+3. If yt-dlp doesn't support, fallback to N_m3u8DL-RE
+4. Auto-convert non-MP4 formats to MP4
+5. Upload to Telegram
 
 ## Quote
 

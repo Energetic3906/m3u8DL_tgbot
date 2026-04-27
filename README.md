@@ -2,6 +2,13 @@
 
 > premium 指的是 telegram 的 premium 用户。为了下载超过 2G 的文件。
 
+## 功能特性
+
+- 支持直接发送 m3u8 URL 进行下载
+- 支持发送网页 URL，bot 自动检测并提取视频（使用 yt-dlp）
+- 自动转换为 MP4 格式
+- 支持 Telegram Premium 用户发送大文件（>2GB）
+
 ## 快速开始（Docker 部署）
 
 ### 1. 初始化配置
@@ -10,7 +17,7 @@
 # 复制配置文件
 cp docker-compose.yml.default docker-compose.yml
 
-# 创建 session 存储目录（用于保存登录状态，更新镜像时不会被删除）
+# 创建 session 存储目录
 mkdir -p sessions
 ```
 
@@ -33,14 +40,7 @@ environment:
 docker-compose run --rm m3u8dl-bot
 ```
 
-首次运行时会自动检测 session 是否存在，如果不存在会引导你创建：
-
-- **普通用户**：只需输入手机号验证 Telegram 账号
-- **Premium 用户**：输入手机号后，还会创建 app_user session 用于发送大文件
-
 ### 4. 正常运行
-
-Session 创建完成后，以后启动不再需要交互：
 
 ```shell
 # 后台运行
@@ -50,31 +50,37 @@ docker-compose up -d
 docker-compose logs -f
 ```
 
-### 5. 更新镜像
+## 使用方式
 
-更新 Docker 镜像或重启服务时，session 文件会保留在 `./sessions/` 目录中，无需重新登录：
+### 直接发送 m3u8 URL
 
-```shell
-# 拉取新镜像
-docker-compose pull
-
-# 重启服务（session 不会丢失）
-docker-compose up -d
+```
+https://example.com/video.m3u8
 ```
 
-## Session 持久化说明
+### 发送网页 URL（自动检测视频）
 
-Session 文件存储在 `sessions/` 目录：
+发送任意包含视频的网页 URL，bot 会使用 yt-dlp 自动检测并下载：
 
-| 文件 | 说明 |
-|------|------|
-| `sessions/ytdl-main.session` | 机器人 session（必须） |
-| `sessions/app_user.session` | 用户 session（仅 PREMIUM=True 时需要） |
+```
+https://example.com/video-page.html
+```
+
+下载后的 caption 格式：
+```
+{视频标题}
+
+{原始URL}
+```
+
+## Session 持久化
+
+Session 文件存储在 `sessions/` 目录，更新镜像时不会丢失。
 
 ## 本地开发
 
 ```shell
-pip install pyrogram ffmpeg-python tqdm fakeredis tgcrypto && sudo apt-get install -y ffmpeg
+pip install pyrogram ffmpeg-python tqdm fakeredis tgcrypto yt-dlp && sudo apt-get install -y ffmpeg
 python3 docker/main.py
 ```
 
@@ -87,6 +93,14 @@ python3 docker/main.py
 | `TOKEN` | Telegram Bot Token |
 | `PREMIUM` | `True` 启用 premium 模式（支持 >2GB 文件） |
 | `AUTHORIZED_USERS` | 授权用户 ID，多个用逗号分隔 |
+
+## 下载流程
+
+1. 收到 URL 后，先尝试使用 yt-dlp 检测是否支持
+2. 如果 yt-dlp 支持，获取标题并下载
+3. 如果 yt-dlp 不支持，回退使用 N_m3u8DL-RE 进行下载
+4. 自动转换非 MP4 格式为 MP4
+5. 上传到 Telegram
 
 ## 引用
 
