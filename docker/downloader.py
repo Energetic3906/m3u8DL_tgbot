@@ -355,13 +355,12 @@ def compress_video(video_path: Path, max_size_bytes: int, is_premium: bool):
         logging.warning(f"Could not detect bit depth: {e}")
 
     # Build video filter for 10-bit conversion
-    video_filter = []
+    # Use format filter to convert 10-bit to 8-bit yuv420p, scale for dimensions
+    vf_parts = []
     if is_10bit:
-        video_filter.append("scale=out_color_space=bt709:out_fmt=yuv420p")
-    else:
-        video_filter.append("scale=out_color_space=bt709")
-
-    vf_string = ",".join(video_filter)
+        vf_parts.append("format=yuv420p")
+    vf_parts.append(f"scale={width}:{height}:force_original_aspect_ratio=decrease")
+    vf_string = ",".join(vf_parts)
 
     # Compress with calculated bitrate
     compress_cmd = [
