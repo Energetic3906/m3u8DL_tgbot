@@ -83,6 +83,9 @@ def get_cookie_file(url: str) -> Optional[str]:
     except Exception as e:
         logging.error(f"Error finding cookie file for {url}: {e}")
         return None
+
+
+def is_ytdlp_supported(url: str) -> Tuple[bool, Optional[str], Optional[str]]:
     """
     Check if yt-dlp supports this URL and get title + best m3u8 URL.
 
