@@ -174,17 +174,8 @@ def handle_message(client: Client, message: types.Message):
 
             if is_supported and title:
                 custom_title = title
-                logging.info(f"yt-dlp found: {title}")
-
-                if m3u8_url:
-                    # If yt-dlp found m3u8 URL, use N_m3u8DL-RE directly
-                    download_url = m3u8_url
-                    is_m3u8_direct = True
-                    logging.info(f"yt-dlp extracted m3u8 URL: {m3u8_url} - using N_m3u8DL-RE")
-                else:
-                    # yt-dlp found title but no direct m3u8, use yt-dlp to download
-                    is_m3u8_direct = False
-                    logging.info(f"Using yt-dlp to download: {user_message}")
+                logging.info(f"yt-dlp found: {title}, using yt-dlp to download")
+                # Always use yt-dlp if supported
             else:
                 logging.info(f"yt-dlp not supported, using N_m3u8DL-RE: {user_message}")
 
