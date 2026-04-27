@@ -140,7 +140,6 @@ def ytdlp_download(url: str, savedir: str, custom_title: str = None, cookie_file
             "python3", "-m", "yt_dlp",
             "-o", f"{output_path}.%(ext)s",
             "--no-playlist",
-            "--no-warnings",
         ]
 
         # Add cookie file if provided
@@ -150,11 +149,25 @@ def ytdlp_download(url: str, savedir: str, custom_title: str = None, cookie_file
 
         cmd.append(url)
 
-        print(f"yt-dlp downloading: {url}")
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+        logging.info(f"yt-dlp downloading: {url}")
 
-        if result.returncode != 0:
-            raise Exception(f"yt-dlp failed: {result.stderr}")
+        # Stream output in real-time (like ytdl_download does for N_m3u8DL-RE)
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            bufsize=1,
+            text=True
+        )
+
+        for line in process.stdout:
+            line = line.strip()
+            if line:
+                logging.info(f"[yt-dlp] {line}")
+
+        process.wait()
+        if process.returncode != 0:
+            raise Exception(f"yt-dlp failed with code {process.returncode}")
 
         # Find downloaded file
         video_paths = list(pathlib.Path(savedir).glob(f"{save_name}.*"))
@@ -166,8 +179,6 @@ def ytdlp_download(url: str, savedir: str, custom_title: str = None, cookie_file
         # Convert to MP4 if needed
         return convert_to_mp4(video_paths)
 
-    except subprocess.TimeoutExpired:
-        raise Exception("yt-dlp download timeout")
     except Exception as e:
         raise Exception(f"yt-dlp download failed: {e}")
 
