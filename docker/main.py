@@ -4,6 +4,16 @@ import pathlib
 from pyrogram import Client, filters, types, enums
 from downloader import download_and_upload_video
 
+def cleanup_stray_sessions():
+    """Remove stray session directories from /app/ root (not in /app/sessions/)"""
+    app_dir = "/app"
+    stray_sessions = ["ytdl-main.session", "app_user.session"]
+    for session_name in stray_sessions:
+        session_path = os.path.join(app_dir, session_name)
+        if os.path.isdir(session_path):
+            if not os.listdir(session_path):
+                os.rmdir(session_path)
+
 # Initialize the Pyrogram client
 api_id =  os.environ.get("APP_ID") # Replace with your actual api_id
 api_hash = os.environ.get("APP_HASH")  # Replace with your actual api_hash
@@ -12,6 +22,9 @@ PREMIUM = os.environ.get("PREMIUM") == 'True'
 
 logging.basicConfig(level=logging.INFO)
 logging.info("PREMIUM: " + str(PREMIUM))
+
+# Clean up any stray session directories from previous runs
+cleanup_stray_sessions()
 
 session_dir = "/app/sessions"
 os.makedirs(session_dir, exist_ok=True)
