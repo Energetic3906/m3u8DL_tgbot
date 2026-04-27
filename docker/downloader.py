@@ -3,12 +3,12 @@ import shutil
 import logging
 import subprocess
 import pathlib
-import ffmpeg
 import uuid
 import time
 import random
 import tempfile
 import fakeredis
+import json
 from pathlib import Path
 from pyrogram.types import Message
 from pyrogram import Client, filters, types, enums
@@ -250,18 +250,45 @@ def gen_cap(bm, url, video_path, custom_title=None):
 def get_metadata(video_path):
     width, height, duration = 1280, 720, 0
     try:
-        video_streams = ffmpeg.probe(video_path, select_streams="v")
-        for item in video_streams.get("streams", []):
-            height = item["height"]
-            width = item["width"]
-        duration = int(float(video_streams["format"]["duration"]))
+        # Use ffprobe to get video metadata
+        probe_cmd = [
+            "ffprobe", "-v", "quiet", "-print_format", "json",
+            "-select_streams", "v:0", "-show_streams", "-show_format", str(video_path)
+        ]
+        result = subprocess.run(probe_cmd, capture_output=True, text=True, check=True)
+        info = json.loads(result.stdout)
+
+        # Get dimensions
+        for stream in info.get("streams", []):
+            if stream.get("codec_type") == "video":
+                width = stream.get("width", 1280)
+                height = stream.get("height", 720)
+                break
+
+        # Get duration
+        format_info = info.get("format", {})
+        duration = int(float(format_info.get("duration", 0) or 0))
+
     except Exception as e:
-        logging.error(e)
+        logging.error(f"ffprobe error: {e}")
+
+    # Generate thumbnail
+    thumb = None
     try:
-        thumb = pathlib.Path(video_path).parent.joinpath(f"{uuid.uuid4().hex}-thunmnail.png").as_posix()
-        ffmpeg.input(video_path, ss=1).filter("scale", width, -1).output(thumb, vframes=1).run()
-    except ffmpeg._run.Error:
-        thumb = None
+        thumb_path = pathlib.Path(video_path).parent.joinpath(f"{uuid.uuid4().hex}-thumbnail.png")
+        thumb_cmd = [
+            "ffmpeg", "-y", "-i", str(video_path),
+            "-ss", "1", "-vframes", "1",
+            "-vf", f"scale={width}:-1",
+            str(thumb_path)
+        ]
+        result = subprocess.run(thumb_cmd, capture_output=True, text=True)
+        if result.returncode == 0 and thumb_path.exists():
+            thumb = thumb_path.as_posix()
+        else:
+            logging.warning(f"Thumbnail generation failed: {result.stderr}")
+    except Exception as e:
+        logging.error(f"Thumbnail error: {e}")
 
     return dict(height=height, width=width, duration=duration, thumb=thumb)
 
