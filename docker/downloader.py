@@ -44,7 +44,7 @@ def download_and_upload_video(user_client, client, message, user_message, base_s
             cookie_file = get_cookie_file(user_message)
 
             try:
-                video_paths = ytdlp_download(user_message, save_dir, custom_title, cookie_file)
+                video_paths = ytdlp_download(user_message, save_dir, custom_title, cookie_file, size_limit)
                 logging.info(f"Downloaded using yt-dlp: {user_message}")
             except Exception as e:
                 logging.warning(f"yt-dlp failed, trying N_m3u8DL-RE: {e}")
@@ -118,8 +118,12 @@ def download_and_upload_video(user_client, client, message, user_message, base_s
                 logging.error(f"Failed to edit message: {edit_err}")
 
 
-def ytdlp_download(url: str, savedir: str, custom_title: str = None, cookie_file: str = None):
-    """Download video using yt-dlp."""
+def ytdlp_download(url: str, savedir: str, custom_title: str = None, cookie_file: str = None, max_size_bytes: int = None):
+    """Download video using yt-dlp.
+
+    Args:
+        max_size_bytes: Maximum file size limit. If specified, yt-dlp will prefer formats that fit within this limit.
+    """
     tempdir = "/tmp/m3u8D/downloading"
     os.makedirs(tempdir, exist_ok=True)
 
@@ -141,6 +145,14 @@ def ytdlp_download(url: str, savedir: str, custom_title: str = None, cookie_file
             "-o", f"{output_path}.%(ext)s",
             "--no-playlist",
         ]
+
+        # Add format selection based on size limit
+        # Use --max-filesize to abort if video exceeds limit
+        if max_size_bytes:
+            size_gb = max_size_bytes / (1024**3)
+            size_str = f"{int(size_gb)}G" if size_gb == int(size_gb) else f"{size_gb:.1f}G"
+            cmd.extend(["--max-filesize", size_str])
+            logging.info(f"Size limit: {size_gb:.1f}GB, using --max-filesize {size_str}")
 
         # Add cookie file if provided
         if cookie_file:
