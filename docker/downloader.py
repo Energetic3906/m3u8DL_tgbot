@@ -151,11 +151,11 @@ def ytdl_download(url: str, savedir: str, custom_title: str = None):
             "--tmp-dir", tempdir,
             "--save-dir", savedir,
             "--save-name", save_name,
-            "--no-log",
             "--auto-select"
         ]
         print(f"N_m3u8DL-RE downloading: {url}")
-        subprocess.run(download_command, check=True, capture_output=True, text=True)
+        # Use stdout=None to show progress in docker logs
+        subprocess.run(download_command, check=True)
 
         video_paths = list(pathlib.Path(savedir).glob("*"))
 
