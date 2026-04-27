@@ -290,6 +290,7 @@ def tqdm_progress(desc, total, finished, speed="", eta=""):
 
 %s
 %s
+%s
 %s    """ % (desc, progress, detail, more("Speed:", speed), more("ETA:", eta))
     f.close()
     return text
