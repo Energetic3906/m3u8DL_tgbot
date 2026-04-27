@@ -145,9 +145,9 @@ def handle_message(client: Client, message: types.Message):
 
     try:
         if PREMIUM:
-            download_and_upload_video(app_user, client, bot_msg, download_url, save_dir, custom_title, display_url)
+            download_and_upload_video(app_user, client, bot_msg, download_url, save_dir, custom_title, display_url, is_premium=True)
         else:
-            download_and_upload_video(app, client, bot_msg, download_url, save_dir, custom_title, display_url)
+            download_and_upload_video(app, client, bot_msg, download_url, save_dir, custom_title, display_url, is_premium=False)
     except Exception as e:
         logging.error(f"Download failed: {e}")
         client.send_message(chat_id, f"Download failed: {str(e)}")

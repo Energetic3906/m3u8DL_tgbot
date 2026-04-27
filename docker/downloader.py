@@ -16,11 +16,16 @@ from io import StringIO
 from tqdm import tqdm
 
 
-def download_and_upload_video(user_client, client, message, user_message, base_save_dir, custom_title=None, display_url=None):
+def download_and_upload_video(user_client, client, message, user_message, base_save_dir, custom_title=None, display_url=None, is_premium=False):
     chat_id = message.chat.id
 
     # Use display_url for caption if provided, otherwise use user_message
     caption_url = display_url if display_url else user_message
+
+    # File size limits in bytes
+    REGULAR_LIMIT = 2 * 1024 * 1024 * 1024  # 2GB
+    PREMIUM_LIMIT = 4 * 1024 * 1024 * 1024   # 4GB
+    size_limit = PREMIUM_LIMIT if is_premium else REGULAR_LIMIT
 
     try:
         save_dir = tempfile.mkdtemp(dir=base_save_dir)
@@ -46,6 +51,17 @@ def download_and_upload_video(user_client, client, message, user_message, base_s
                 raise Exception(f"Both yt-dlp and N_m3u8DL-RE failed.\n\nyt-dlp error: {error_msg}\n\nN_m3u8DL-RE error: {e}")
 
         for video_path in video_paths:
+            file_size = video_path.stat().st_size
+            logging.info(f"File size: {file_size / (1024*1024):.2f}MB, limit: {size_limit / (1024*1024*1024):.1f}GB")
+
+            # Compress if file exceeds size limit
+            if file_size > size_limit:
+                logging.info(f"File exceeds limit, compressing...")
+                video_path = compress_video(video_path, size_limit, is_premium)
+
+            video_path_str = str(video_path)
+            print("video_paths: ", video_path_str)
+            cap, meta = gen_cap(message, caption_url, video_path_str, custom_title)
             video_path_str = str(video_path)
             print("video_paths: ", video_path_str)
             cap, meta = gen_cap(message, caption_url, video_path_str, custom_title)
@@ -218,6 +234,117 @@ def convert_to_mp4(video_paths):
     for video_path in final_video_paths:
         print(f"Download completed: {video_path}")
     return final_video_paths
+
+
+def compress_video(video_path: Path, max_size_bytes: int, is_premium: bool):
+    """
+    Compress video to fit within max_size_bytes using FFmpeg.
+    Calculates target bitrate based on duration and target size.
+    """
+    import math
+
+    # Get video metadata
+    probe_cmd = [
+        "ffprobe", "-v", "quiet", "-print_format", "json",
+        "-show_format", str(video_path)
+    ]
+    result = subprocess.run(probe_cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        logging.warning(f"ffprobe failed for {video_path}, skipping compression")
+        return video_path
+
+    info = json.loads(result.stdout)
+    duration_str = info.get("format", {}).get("duration", "0")
+    try:
+        duration = float(duration_str)
+    except (ValueError, TypeError):
+        duration = 0
+
+    if duration <= 0:
+        logging.warning(f"Could not get duration for {video_path}, skipping compression")
+        return video_path
+
+    # Target size with 10% buffer for container/metadata overhead
+    target_size = max_size_bytes * 0.9
+
+    # Audio bitrate (keep original audio)
+    audio_bitrate = 128 * 1024  # 128kbps
+
+    # Calculate video bitrate
+    # target_size (bytes) = video_bitrate (bytes/s) * duration (s) + audio_bitrate * duration
+    # video_bitrate = (target_size / duration) - audio_bitrate
+    video_bitrate_bps = (target_size / duration) - audio_bitrate
+    video_bitrate_kbps = math.floor(video_bitrate_bps / 1024)
+
+    # Minimum bitrate check (don't go too low)
+    min_bitrate_kbps = 500
+    if video_bitrate_kbps < min_bitrate_kbps:
+        logging.warning(f"Calculated bitrate too low ({video_bitrate_kbps}kbps), using minimum {min_bitrate_kbps}kbps")
+        video_bitrate_kbps = min_bitrate_kbps
+
+    logging.info(f"Compressing: duration={duration:.1f}s, target_size={target_size/(1024*1024):.1f}MB, video_bitrate={video_bitrate_kbps}kbps")
+
+    # Create output path
+    output_path = video_path.with_suffix(".compressed.mp4")
+
+    # Compress with calculated bitrate
+    compress_cmd = [
+        "ffmpeg", "-y", "-i", str(video_path),
+        "-c:v", "libx264", "-b:v", f"{video_bitrate_kbps}k",
+        "-maxrate", f"{video_bitrate_kbps * 1.5}k", "-bufsize", f"{video_bitrate_kbps * 2}k",
+        "-c:a", "aac", "-b:a", "128k",
+        "-movflags", "+faststart",
+        str(output_path)
+    ]
+
+    logging.info(f"Running: {' '.join(compress_cmd)}")
+
+    result = subprocess.run(
+        compress_cmd,
+        capture_output=True,
+        text=True,
+        timeout=max(600, int(duration * 2))  # At least 10 min, or 2x duration
+    )
+
+    if result.returncode != 0:
+        logging.error(f"Compression failed: {result.stderr}")
+        # Try simpler compression (just CRF-based)
+        logging.info("Trying simpler compression...")
+        simple_cmd = [
+            "ffmpeg", "-y", "-i", str(video_path),
+            "-c:v", "libx264", "-crf", "28",
+            "-c:a", "copy",
+            "-movflags", "+faststart",
+            str(output_path)
+        ]
+        result = subprocess.run(simple_cmd, capture_output=True, text=True, timeout=max(600, int(duration * 2)))
+        if result.returncode != 0:
+            logging.error(f"Simple compression also failed: {result.stderr}")
+            return video_path  # Return original if compression fails
+
+    # Check if compressed file is within limit
+    compressed_size = output_path.stat().st_size
+    if compressed_size > max_size_bytes:
+        logging.warning(f"Compressed file still too large: {compressed_size/(1024*1024):.1f}MB > {max_size_bytes/(1024*1024*1024):.1f}GB")
+        # Try more aggressive compression
+        video_bitrate_kbps = max(300, video_bitrate_kbps // 2)
+        aggressive_cmd = [
+            "ffmpeg", "-y", "-i", str(video_path),
+            "-c:v", "libx264", "-b:v", f"{video_bitrate_kbps}k",
+            "-maxrate", f"{video_bitrate_kbps * 1.5}k", "-bufsize", f"{video_bitrate_kbps * 2}k",
+            "-c:a", "aac", "-b:a", "96k",
+            "-movflags", "+faststart",
+            str(output_path)
+        ]
+        result = subprocess.run(aggressive_cmd, capture_output=True, text=True, timeout=max(600, int(duration * 2)))
+        if result.returncode == 0:
+            compressed_size = output_path.stat().st_size
+
+    logging.info(f"Compression complete: {compressed_size/(1024*1024):.1f}MB (was {video_path.stat().st_size/(1024*1024):.1f}MB)")
+
+    # Remove original, return compressed
+    video_path.unlink()
+    return output_path
 
 
 def gen_cap(bm, url, video_path, custom_title=None):
