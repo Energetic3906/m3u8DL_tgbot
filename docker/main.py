@@ -15,6 +15,30 @@ def cleanup_stray_sessions():
             if not os.listdir(session_path):
                 os.rmdir(session_path)
 
+
+def cleanup_cache():
+    """Clean up download cache directories."""
+    import shutil
+    cache_paths = [
+        "/tmp/m3u8D/cache",
+        "/tmp/m3u8D/downloading"
+    ]
+    for cache_path in cache_paths:
+        if os.path.exists(cache_path):
+            try:
+                for item in os.listdir(cache_path):
+                    item_path = os.path.join(cache_path, item)
+                    try:
+                        if os.path.isfile(item_path):
+                            os.remove(item_path)
+                        elif os.path.isdir(item_path):
+                            shutil.rmtree(item_path)
+                    except Exception as e:
+                        logging.warning(f"Failed to remove {item_path}: {e}")
+                logging.info(f"Cache cleaned: {cache_path}")
+            except Exception as e:
+                logging.warning(f"Failed to clean {cache_path}: {e}")
+
 # Initialize the Pyrogram client
 api_id = os.environ.get("APP_ID")
 api_hash = os.environ.get("APP_HASH")
@@ -26,6 +50,9 @@ logging.info("PREMIUM: " + str(PREMIUM))
 
 # Clean up any stray session directories from previous runs
 cleanup_stray_sessions()
+
+# Clean up download cache from previous runs
+cleanup_cache()
 
 session_dir = "/app/sessions"
 os.makedirs(session_dir, exist_ok=True)
