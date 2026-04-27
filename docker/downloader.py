@@ -103,7 +103,12 @@ def download_and_upload_video(user_client, client, message, user_message, base_s
                 raise
 
     except Exception as e:
-        client.send_message(chat_id, f"Download failed: {str(e)}")
+        logging.error(f"Download failed: {e}")
+        if message:
+            try:
+                message.edit_text(f"Download failed: {str(e)}")
+            except:
+                pass
 
 
 def ytdlp_download(url: str, savedir: str, custom_title: str = None):
