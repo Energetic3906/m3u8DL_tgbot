@@ -119,12 +119,11 @@ def download_and_upload_video(user_client, client, message, user_message, base_s
 
 
 def ytdlp_download(url: str, savedir: str, custom_title: str = None, cookie_file: str = None, max_size_bytes: int = None):
-    """Download video using yt-dlp with smart format selection based on size limit.
+    """Download video using yt-dlp.
 
     Args:
-        max_size_bytes: Maximum file size limit. If specified, selects appropriate format.
-                        If best format exceeds by >1GB, downgrade resolution.
-                        If best format exceeds by <=1GB, download and compress with ffmpeg.
+        max_size_bytes: Maximum file size limit. Uses --max-filesize to let yt-dlp
+                        automatically select the best format within the limit.
     """
     tempdir = "/tmp/m3u8D/downloading"
     os.makedirs(tempdir, exist_ok=True)
@@ -139,13 +138,8 @@ def ytdlp_download(url: str, savedir: str, custom_title: str = None, cookie_file
 
     output_path = os.path.join(savedir, save_name)
 
-    # Track if we need post-download compression
-    needs_compression = False
-    expected_filesize = 0
-    expected_bitrate = 0
-
     try:
-        # Step 1: Get video info to determine best format before downloading
+        # Get video duration for logging
         info_cmd = [
             "python3", "-m", "yt_dlp",
             "--dump-json",
@@ -159,86 +153,21 @@ def ytdlp_download(url: str, savedir: str, custom_title: str = None, cookie_file
         logging.info(f"Getting video info: {' '.join(info_cmd)}")
         info_result = subprocess.run(info_cmd, capture_output=True, text=True, timeout=60)
 
-        format_selector = None
+        duration = 0
         if info_result.returncode == 0 and info_result.stdout:
             video_info = json.loads(info_result.stdout)
-            formats = video_info.get('formats', [])
+            duration = video_info.get('duration', 0)
 
-            if formats and max_size_bytes:
-                target_size = max_size_bytes
-                one_gb = 1024 * 1024 * 1024
+        # Use --max-filesize to let yt-dlp automatically select the best format
+        # that fits within the limit. This is more reliable than our format
+        # matching which can be inaccurate due to YouTube's estimated sizes.
+        format_selector = None
+        if max_size_bytes:
+            size_gb = (max_size_bytes * 0.9) / (1024**3)  # 10% buffer
+            format_selector = f"--max-filesize {size_gb:.2f}G"
+            logging.info(f"Using --max-filesize={size_gb:.2f}G for {duration:.0f}s video")
 
-                # Find best format - prefer combined formats (have both video and audio)
-                best_format = None
-                best_height = 0
-                for fmt in formats:
-                    height = fmt.get('height', 0)
-                    # Use filesize first, fallback to filesize_approx
-                    filesize = fmt.get('filesize') or fmt.get('fsize') or fmt.get('filesize_approx') or 0
-                    vcodec = fmt.get('vcodec', 'none')
-                    acodec = fmt.get('acodec', 'none')
-                    # Prefer formats that already have both video and audio (combined container)
-                    has_video = vcodec and vcodec != 'none'
-                    has_audio = acodec and acodec != 'none'
-                    is_combined = has_video and has_audio
-
-                    if height and filesize > 0:
-                        if best_format is None:
-                            best_format = fmt
-                            best_height = height
-                        elif height > best_height:
-                            # Prefer higher resolution, but favor combined formats at same height
-                            if height == best_height and is_combined:
-                                best_format = fmt
-                            elif height > best_height:
-                                best_format = fmt
-                                best_height = height
-
-                if best_format:
-                    # Estimate combined size: video_filesize + audio_overhead
-                    # Audio typically adds 1-2MB per minute at 128kbps
-                    video_filesize = best_format.get('filesize') or best_format.get('fsize') or best_format.get('filesize_approx') or 0
-                    duration = video_info.get('duration', 0)
-                    audio_overhead = int(duration * 128 * 1024 / 8) if duration else 20 * 1024 * 1024  # ~20MB default
-                    container_overhead = int(video_filesize * 0.02) if video_filesize else 0  # 2% container overhead
-                    expected_filesize = video_filesize + audio_overhead + container_overhead
-                    size_diff = expected_filesize - target_size
-
-                    logging.info(f"Best format: height={best_height}, video_size={video_filesize / (1024*1024):.1f}MB, expected_total={expected_filesize / (1024*1024):.1f}MB, target={target_size / (1024*1024):.1f}MB")
-
-                    if size_diff > one_gb:
-                        # 超过1GB，降分辨率
-                        resolution_map = {4320: 2160, 2160: 1440, 1440: 1080, 1080: 720, 720: 480}
-                        target_height = resolution_map.get(best_height, best_height // 2)
-
-                        for fmt in formats:
-                            h = fmt.get('height', 0)
-                            fs = fmt.get('filesize') or fmt.get('fsize') or fmt.get('filesize_approx') or 0
-                            vcodec = fmt.get('vcodec', 'none')
-                            # Only consider video formats with estimated total under limit
-                            if h == target_height and fs > 0 and vcodec != 'none':
-                                est_total = fs + (audio_overhead + container_overhead)
-                                if est_total <= target_size:
-                                    format_selector = f"bestvideo[height={h}]+bestaudio/best[height={h}]"
-                                    expected_filesize = est_total
-                                    logging.info(f"Downgrade to height={h}, estimated_total={est_total / (1024*1024):.1f}MB")
-                                    break
-
-                        if not format_selector:
-                            # 没找到合适分辨率，用--max-filesize让yt-dlp自动选
-                            logging.info("No suitable lower resolution, using --max-filesize")
-                            size_gb = target_size / (1024**3)
-                            format_selector = f"--max-filesize {size_gb:.1f}G"
-                    elif size_diff > 0:
-                        # 超过但不到1GB，下载后压缩
-                        needs_compression = True
-                        logging.info(f"Will download and compress: expected {expected_filesize / (1024*1024):.1f}MB > {target_size / (1024*1024):.1f}MB")
-                        # Download best format
-                    else:
-                        # 文件在限制内，让yt-dlp自动选择最佳格式（video+audio合并）
-                        format_selector = "bestvideo+bestaudio/best"
-
-        # Step 2: Download with selected format
+        # Download
         cmd = [
             "python3", "-m", "yt_dlp",
             "-o", f"{output_path}.%(ext)s",
@@ -246,12 +175,8 @@ def ytdlp_download(url: str, savedir: str, custom_title: str = None, cookie_file
         ]
 
         if format_selector:
-            if isinstance(format_selector, str) and format_selector.startswith("--max-filesize"):
-                # format_selector is "--max-filesize XG"
-                parts = format_selector.split()
-                cmd.extend(parts)
-            else:
-                cmd.extend(["-f", format_selector])
+            parts = format_selector.split()
+            cmd.extend(parts)
 
         if cookie_file:
             cmd.extend(["--cookies", cookie_file])
@@ -284,53 +209,6 @@ def ytdlp_download(url: str, savedir: str, custom_title: str = None, cookie_file
 
         if not video_paths:
             raise Exception("yt-dlp downloaded but no file found")
-
-        # If needs compression, compress with ffmpeg before converting
-        if needs_compression and video_paths and max_size_bytes:
-            video_path = video_paths[0]
-            current_size = video_path.stat().st_size
-            target_size = max_size_bytes * 0.9
-            if current_size > max_size_bytes:
-                logging.info(f"Compressing video: {current_size / (1024*1024):.1f}MB -> target {target_size / (1024*1024):.1f}MB (max_size * 0.9)")
-
-                # Get video bitrate for compression calculation
-                probe_cmd = [
-                    "ffprobe", "-v", "quiet", "-print_format", "json",
-                    "-show_format", str(video_path)
-                ]
-                result = subprocess.run(probe_cmd, capture_output=True, text=True)
-                if result.returncode == 0:
-                    info = json.loads(result.stdout)
-                    duration_str = info.get("format", {}).get("duration", "0")
-                    try:
-                        duration = float(duration_str)
-                    except (ValueError, TypeError):
-                        duration = 0
-
-                    if duration > 0:
-                        # Calculate target bitrate: bitrate * (max_size * 0.9) / filesize
-                        # max_size * 0.9 gives us 90% of limit as target (10% buffer)
-                        current_bitrate = int(float(info.get("format", {}).get("bit_rate", 0)))
-                        if current_bitrate > 0:
-                            target_size = max_size_bytes * 0.9
-                            target_bitrate = int(current_bitrate * target_size / current_size)
-                            audio_bitrate = 128 * 1024  # 128kbps audio
-                            video_bitrate = max(target_bitrate - audio_bitrate, 500 * 1024)  # min 500kbps
-
-                            output_path = video_path.with_suffix(".compressed.mp4")
-                            compress_cmd = [
-                                "ffmpeg", "-y", "-i", str(video_path),
-                                "-c:v", "libx264", "-b:v", f"{video_bitrate}",
-                                "-c:a", "aac", "-b:a", "128k",
-                                "-movflags", "+faststart",
-                                str(output_path)
-                            ]
-                            logging.info(f"Compress cmd: {' '.join(compress_cmd)}")
-                            result = subprocess.run(compress_cmd, capture_output=True, text=True, timeout=max(600, int(duration * 2)))
-                            if result.returncode == 0 and output_path.exists():
-                                video_path.unlink()
-                                video_paths[0] = output_path
-                                logging.info(f"Compression done: {output_path.stat().st_size / (1024*1024):.1f}MB")
 
         return convert_to_mp4(video_paths)
 
