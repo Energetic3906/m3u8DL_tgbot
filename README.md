@@ -77,6 +77,42 @@ https://example.com/video-page.html
 
 Session 文件存储在 `sessions/` 目录，更新镜像时不会丢失。
 
+## Cookie 认证支持
+
+对于需要登录认证的视频网站（如 Twitter/X），可以将浏览器 cookie 文件挂载到容器中使用。
+
+### 配置方式
+
+1. 在项目根目录创建 `cookies` 目录：
+```shell
+mkdir -p cookies
+```
+
+2. 从浏览器导出 cookie 文件，文件命名规则为 `域名.txt`，例如：
+   - Twitter/X: `x.com.txt`
+   - 支持短域名自动映射：`t.co` → `x.com.txt`
+
+3. 修改 `docker-compose.yml` 添加 cookie 目录挂载：
+```yaml
+volumes:
+  - ./sessions:/app/sessions
+  - ./cookies:/app/cookies
+  - ./tmp:/tmp/m3u8D
+```
+
+### Cookie 导出方法
+
+**Chrome/Edge:**
+1. 安装 "EditThisCookie" 扩展
+2. 登录目标网站
+3. 点击扩展图标 → 导出为 JSON
+4. 保存为 `域名.txt` 格式
+
+**Firefox:**
+1. 登录目标网站
+2. 打开开发者工具 → 存储 → Cookie
+3. 导出为 Netscape 格式
+
 ## 本地开发
 
 ```shell
@@ -96,8 +132,8 @@ python3 docker/main.py
 
 ## 下载流程
 
-1. 收到 URL 后，先尝试使用 yt-dlp 检测是否支持
-2. 如果 yt-dlp 支持，获取标题并下载
+1. 收到 URL 后，自动查找对应域名的 cookie 文件
+2. 使用 yt-dlp 下载，如有 cookie 则自动使用
 3. 如果 yt-dlp 不支持，回退使用 N_m3u8DL-RE 进行下载
 4. 自动转换非 MP4 格式为 MP4
 5. 上传到 Telegram

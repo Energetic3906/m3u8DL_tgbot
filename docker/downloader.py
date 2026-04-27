@@ -14,6 +14,7 @@ from pyrogram.types import Message
 from pyrogram import Client, filters, types, enums
 from io import StringIO
 from tqdm import tqdm
+from webpage import get_cookie_file
 
 
 def download_and_upload_video(user_client, client, message, user_message, base_save_dir, custom_title=None, display_url=None, is_premium=False, skip_ytdlp=False):
@@ -39,8 +40,11 @@ def download_and_upload_video(user_client, client, message, user_message, base_s
             video_paths = None
             error_msg = None
 
+            # Check for domain-specific cookie file
+            cookie_file = get_cookie_file(user_message)
+
             try:
-                video_paths = ytdlp_download(user_message, save_dir, custom_title)
+                video_paths = ytdlp_download(user_message, save_dir, custom_title, cookie_file)
                 logging.info(f"Downloaded using yt-dlp: {user_message}")
             except Exception as e:
                 logging.warning(f"yt-dlp failed, trying N_m3u8DL-RE: {e}")
@@ -106,12 +110,15 @@ def download_and_upload_video(user_client, client, message, user_message, base_s
         logging.error(f"Download failed: {e}")
         if message:
             try:
-                message.edit_text(f"Download failed: {str(e)}")
-            except:
-                pass
+                # Show just the last line of error (most actionable)
+                error_lines = [l.strip() for l in str(e).split('\n') if l.strip()]
+                last_error = error_lines[-1] if error_lines else str(e)
+                message.edit_text(f"Download failed: {last_error}")
+            except Exception as edit_err:
+                logging.error(f"Failed to edit message: {edit_err}")
 
 
-def ytdlp_download(url: str, savedir: str, custom_title: str = None):
+def ytdlp_download(url: str, savedir: str, custom_title: str = None, cookie_file: str = None):
     """Download video using yt-dlp."""
     tempdir = "/tmp/m3u8D/downloading"
     os.makedirs(tempdir, exist_ok=True)
@@ -134,8 +141,15 @@ def ytdlp_download(url: str, savedir: str, custom_title: str = None):
             "-o", f"{output_path}.%(ext)s",
             "--no-playlist",
             "--no-warnings",
-            url
         ]
+
+        # Add cookie file if provided
+        if cookie_file:
+            cmd.extend(["--cookies", cookie_file])
+            logging.info(f"Using cookie file: {cookie_file}")
+
+        cmd.append(url)
+
         print(f"yt-dlp downloading: {url}")
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
 

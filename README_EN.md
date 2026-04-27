@@ -77,6 +77,41 @@ Caption format after download:
 
 Session files are stored in `sessions/` directory and persist across image updates.
 
+## Cookie Authentication Support
+
+For video sites requiring login (e.g., Twitter/X), you can mount browser cookie files for authentication.
+
+### Setup
+
+1. Create `cookies` directory in project root:
+```shell
+mkdir -p cookies
+```
+
+2. Export cookies from browser, name format: `domain.txt`, e.g.:
+   - Twitter/X: `x.com.txt`
+   - Short domains auto-map: `t.co` → `x.com.txt`
+
+3. Add cookie mount to `docker-compose.yml`:
+```yaml
+volumes:
+  - ./sessions:/app/sessions
+  - ./cookies:/app/cookies
+  - ./tmp:/tmp/m3u8D
+```
+
+### Cookie Export
+
+**Chrome/Edge:**
+1. Install "EditThisCookie" extension
+2. Login to target site
+3. Click extension → Export → save as `domain.txt`
+
+**Firefox:**
+1. Login to target site
+2. Dev Tools → Storage → Cookies
+3. Export as Netscape format
+
 ## Local Development
 
 ```shell
@@ -96,8 +131,8 @@ python3 docker/main.py
 
 ## Download Flow
 
-1. Receive URL, try yt-dlp first to check support
-2. If yt-dlp supports it, get title and download
+1. Receive URL, lookup cookie file for domain automatically
+2. Use yt-dlp to download (with cookies if available)
 3. If yt-dlp doesn't support, fallback to N_m3u8DL-RE
 4. Auto-convert non-MP4 formats to MP4
 5. Upload to Telegram

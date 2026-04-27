@@ -11,6 +11,7 @@ services:
       - AUTHORIZED_USERS=<your_user_id>
     volumes:
       - ./sessions:/app/sessions
+      - ./cookies:/app/cookies
       - ./tmp:/tmp/m3u8D
     stdin_open: true
     tty: true

@@ -208,8 +208,6 @@ def handle_message(client: Client, message: types.Message):
         is_m3u8_direct
     )
 
-    client.send_message(chat_id, f"Task submitted! Download will start shortly.")
-
 
 # Start client
 if PREMIUM:

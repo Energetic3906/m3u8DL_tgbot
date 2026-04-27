@@ -2,9 +2,87 @@ import subprocess
 import json
 import re
 import logging
+import os
 from typing import Optional, Tuple, List
+from urllib.parse import urlparse
 
-def is_ytdlp_supported(url: str) -> Tuple[bool, Optional[str], Optional[str]]:
+# Cookie file directory
+COOKIE_DIR = "/app/cookies"
+
+# Domain alias mapping: short domain -> primary cookie file domain
+DOMAIN_ALIASES = {
+    # Twitter/X
+    'x.com': 'x.com',
+    'twitter.com': 'x.com',
+    't.co': 'x.com',
+    # Instagram
+    'instagram.com': 'instagram.com',
+    'instagr.am': 'instagram.com',
+    # Facebook
+    'facebook.com': 'facebook.com',
+    'fb.com': 'facebook.com',
+    'fb.watch': 'facebook.com',
+    # Bilibili
+    'bilibili.com': 'bilibili.com',
+    'bilibilibili.com': 'bilibili.com',
+    'b23.tv': 'bilibili.com',
+    # Douyin
+    'douyin.com': 'douyin.com',
+    # YouTube (for age-restricted content)
+    'youtube.com': 'youtube.com',
+    'youtu.be': 'youtube.com',
+    # Weibo
+    'weibo.com': 'weibo.com',
+    'weibo.cn': 'weibo.com',
+    't.cn': 'weibo.com',
+}
+
+def get_cookie_file(url: str) -> Optional[str]:
+    """
+    Find cookie file for a URL.
+    Checks domain aliases and returns path to cookie file if exists.
+
+    Args:
+        url: The URL to find cookie for
+
+    Returns:
+        Path to cookie file if exists, None otherwise
+    """
+    try:
+        parsed = urlparse(url)
+        domain = parsed.netloc.lower()
+
+        # Remove port if present
+        if ':' in domain:
+            domain = domain.split(':')[0]
+
+        # Remove 'www.' prefix
+        if domain.startswith('www.'):
+            domain = domain[4:]
+
+        # Check direct domain match
+        cookie_name = f"{domain}.txt"
+        cookie_path = os.path.join(COOKIE_DIR, cookie_name)
+        if os.path.exists(cookie_path):
+            logging.info(f"Found cookie file for {domain}: {cookie_path}")
+            return cookie_path
+
+        # Check aliases
+        for alias, primary in DOMAIN_ALIASES.items():
+            if domain == alias or domain.endswith(f'.{alias}'):
+                cookie_name = f"{primary}.txt"
+                cookie_path = os.path.join(COOKIE_DIR, cookie_name)
+                if os.path.exists(cookie_path):
+                    logging.info(f"Found cookie file for {domain} via alias {alias}: {cookie_path}")
+                    return cookie_path
+                break
+
+        logging.info(f"No cookie file found for {domain}")
+        return None
+
+    except Exception as e:
+        logging.error(f"Error finding cookie file for {url}: {e}")
+        return None
     """
     Check if yt-dlp supports this URL and get title + best m3u8 URL.
 
