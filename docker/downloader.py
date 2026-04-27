@@ -16,8 +16,11 @@ from io import StringIO
 from tqdm import tqdm
 
 
-def download_and_upload_video(user_client, client, message, user_message, base_save_dir, custom_title=None):
+def download_and_upload_video(user_client, client, message, user_message, base_save_dir, custom_title=None, display_url=None):
     chat_id = message.chat.id
+
+    # Use display_url for caption if provided, otherwise use user_message
+    caption_url = display_url if display_url else user_message
 
     try:
         save_dir = tempfile.mkdtemp(dir=base_save_dir)
@@ -47,7 +50,7 @@ def download_and_upload_video(user_client, client, message, user_message, base_s
         for video_path in video_paths:
             video_path_str = str(video_path)
             print("video_paths: ", video_path_str)
-            cap, meta = gen_cap(message, user_message, video_path_str, custom_title)
+            cap, meta = gen_cap(message, caption_url, video_path_str, custom_title)
             print("cap: ", cap)
             print("meta: ", meta)
             user_client.send_video(
