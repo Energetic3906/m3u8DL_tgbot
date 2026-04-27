@@ -194,14 +194,17 @@ def ytdlp_download(url: str, savedir: str, custom_title: str = None, cookie_file
                         for fmt in formats:
                             h = fmt.get('height', 0)
                             fs = fmt.get('filesize') or fmt.get('fsize') or 0
-                            if h == target_height and fs > 0 and fs <= target_size:
-                                format_selector = f"bestvideo[height={h}][ext=mp4]+bestaudio[ext=m4a]/best[height={h}]"
+                            vcodec = fmt.get('vcodec', 'none')
+                            acodec = fmt.get('acodec', 'none')
+                            # Check if this format has video and fits size limit
+                            if h == target_height and fs > 0 and fs <= target_size and vcodec != 'none':
+                                format_selector = f"bestvideo[height={h}]+bestaudio/best[height={h}]"
                                 expected_filesize = fs
                                 logging.info(f"Downgrade to height={h}, size={fs / (1024*1024):.1f}MB")
                                 break
 
                         if not format_selector:
-                            # 没找到合适分辨率，用--max-filesize
+                            # 没找到合适分辨率，用--max-filesize让yt-dlp自动选
                             logging.info("No suitable lower resolution, using --max-filesize")
                             size_gb = target_size / (1024**3)
                             format_selector = f"--max-filesize {size_gb:.1f}G"
@@ -211,8 +214,8 @@ def ytdlp_download(url: str, savedir: str, custom_title: str = None, cookie_file
                         logging.info(f"Will download and compress: expected {expected_filesize / (1024*1024):.1f}MB > {target_size / (1024*1024):.1f}MB")
                         # Download best format
                     else:
-                        # 正常下载
-                        format_selector = f"bestvideo[height={best_height}][ext=mp4]+bestaudio[ext=m4a]/best[height={best_height}]"
+                        # 文件在限制内，让yt-dlp自动选择最佳格式（video+audio合并）
+                        format_selector = "bestvideo+bestaudio/best"
 
         # Step 2: Download with selected format
         cmd = [
