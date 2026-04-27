@@ -5,6 +5,7 @@ import shutil
 from concurrent.futures import ThreadPoolExecutor
 from pyrogram import Client, filters, types, enums
 from downloader import download_and_upload_video
+from webpage import is_ytdlp_supported
 
 # Thread pool for parallel downloads
 download_executor = ThreadPoolExecutor(max_workers=3)
