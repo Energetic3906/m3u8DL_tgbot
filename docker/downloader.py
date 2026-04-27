@@ -323,9 +323,38 @@ def compress_video(video_path: Path, max_size_bytes: int, is_premium: bool):
     # Create output path
     output_path = video_path.with_suffix(".compressed.mp4")
 
+    # Check if input is 10-bit (need conversion for libx264)
+    is_10bit = False
+    try:
+        probe_cmd = [
+            "ffprobe", "-v", "quiet", "-print_format", "json",
+            "-select_streams", "v:0", "-show_streams", str(video_path)
+        ]
+        result = subprocess.run(probe_cmd, capture_output=True, text=True, timeout=30)
+        if result.returncode == 0:
+            info = json.loads(result.stdout)
+            for stream in info.get("streams", []):
+                pix_fmt = stream.get("pix_fmt", "")
+                if "10le" in pix_fmt or "10bit" in pix_fmt or "10bit" in str(stream):
+                    is_10bit = True
+                    logging.info(f"Detected 10-bit input, will convert to 8-bit")
+                    break
+    except Exception as e:
+        logging.warning(f"Could not detect bit depth: {e}")
+
+    # Build video filter for 10-bit conversion
+    video_filter = []
+    if is_10bit:
+        video_filter.append("scale=out_color_space=bt709:out_fmt=yuv420p")
+    else:
+        video_filter.append("scale=out_color_space=bt709")
+
+    vf_string = ",".join(video_filter)
+
     # Compress with calculated bitrate
     compress_cmd = [
         "ffmpeg", "-y", "-i", str(video_path),
+        "-vf", vf_string,
         "-c:v", "libx264", "-b:v", f"{video_bitrate_kbps}k",
         "-maxrate", f"{video_bitrate_kbps * 1.5}k", "-bufsize", f"{video_bitrate_kbps * 2}k",
         "-c:a", "aac", "-b:a", "128k",
@@ -348,11 +377,15 @@ def compress_video(video_path: Path, max_size_bytes: int, is_premium: bool):
         logging.info("Trying simpler compression...")
         simple_cmd = [
             "ffmpeg", "-y", "-i", str(video_path),
+        ]
+        if is_10bit:
+            simple_cmd.extend(["-vf", vf_string])
+        simple_cmd.extend([
             "-c:v", "libx264", "-crf", "28",
-            "-c:a", "copy",
+            "-c:a", "aac", "-b:a", "128k",
             "-movflags", "+faststart",
             str(output_path)
-        ]
+        ])
         result = subprocess.run(simple_cmd, capture_output=True, text=True, timeout=max(600, int(duration * 2)))
         if result.returncode != 0:
             logging.error(f"Simple compression also failed: {result.stderr}")
@@ -366,12 +399,16 @@ def compress_video(video_path: Path, max_size_bytes: int, is_premium: bool):
         video_bitrate_kbps = max(300, video_bitrate_kbps // 2)
         aggressive_cmd = [
             "ffmpeg", "-y", "-i", str(video_path),
+        ]
+        if is_10bit:
+            aggressive_cmd.extend(["-vf", vf_string])
+        aggressive_cmd.extend([
             "-c:v", "libx264", "-b:v", f"{video_bitrate_kbps}k",
             "-maxrate", f"{video_bitrate_kbps * 1.5}k", "-bufsize", f"{video_bitrate_kbps * 2}k",
             "-c:a", "aac", "-b:a", "96k",
             "-movflags", "+faststart",
             str(output_path)
-        ]
+        ])
         result = subprocess.run(aggressive_cmd, capture_output=True, text=True, timeout=max(600, int(duration * 2)))
         if result.returncode == 0:
             compressed_size = output_path.stat().st_size
