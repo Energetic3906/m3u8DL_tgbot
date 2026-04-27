@@ -10,7 +10,7 @@
 # Copy configuration file
 cp docker-compose.yml.default docker-compose.yml
 
-# Create session storage directory
+# Create session storage directory (persists login state across image updates)
 mkdir -p sessions
 ```
 
@@ -49,6 +49,27 @@ docker-compose up -d
 # View logs
 docker-compose logs -f
 ```
+
+### 5. Updating the Image
+
+When updating the Docker image or restarting the service, session files in `./sessions/` are preserved - no re-login required:
+
+```shell
+# Pull new image
+docker-compose pull
+
+# Restart service (session preserved)
+docker-compose up -d
+```
+
+## Session Persistence
+
+Session files are stored in the `sessions/` directory:
+
+| File | Description |
+|------|-------------|
+| `sessions/ytdl-main.session` | Bot session (required) |
+| `sessions/app_user.session` | User session (only needed when PREMIUM=True) |
 
 ## Local Development
 

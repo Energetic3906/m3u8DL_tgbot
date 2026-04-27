@@ -10,9 +10,8 @@ services:
       - PREMIUM=False
       - AUTHORIZED_USERS=<your_user_id>
     volumes:
-      - ./sessions/ytdl-main.session:/app/ytdl-main.session
-      - ./sessions/app_user.session:/app/app_user.session
-      - /tmp/m3u8D:/tmp/m3u8D
+      - ./sessions:/app/sessions
+      - ./tmp:/tmp/m3u8D
     stdin_open: true
     tty: true
     restart: always

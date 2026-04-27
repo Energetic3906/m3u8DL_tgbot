@@ -11,7 +11,8 @@ def init_sessions():
         print("ERROR: APP_ID and APP_HASH environment variables are required.")
         sys.exit(1)
 
-    session_dir = "/app"
+    session_dir = "/app/sessions"
+    os.makedirs(session_dir, exist_ok=True)
 
     # ytdl-main.session (bot session)
     bot_session_path = os.path.join(session_dir, "ytdl-main.session")

@@ -10,7 +10,7 @@
 # 复制配置文件
 cp docker-compose.yml.default docker-compose.yml
 
-# 创建 session 存储目录
+# 创建 session 存储目录（用于保存登录状态，更新镜像时不会被删除）
 mkdir -p sessions
 ```
 
@@ -49,6 +49,27 @@ docker-compose up -d
 # 查看日志
 docker-compose logs -f
 ```
+
+### 5. 更新镜像
+
+更新 Docker 镜像或重启服务时，session 文件会保留在 `./sessions/` 目录中，无需重新登录：
+
+```shell
+# 拉取新镜像
+docker-compose pull
+
+# 重启服务（session 不会丢失）
+docker-compose up -d
+```
+
+## Session 持久化说明
+
+Session 文件存储在 `sessions/` 目录：
+
+| 文件 | 说明 |
+|------|------|
+| `sessions/ytdl-main.session` | 机器人 session（必须） |
+| `sessions/app_user.session` | 用户 session（仅 PREMIUM=True 时需要） |
 
 ## 本地开发
 

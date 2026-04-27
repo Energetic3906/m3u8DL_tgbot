@@ -13,9 +13,12 @@ PREMIUM = os.environ.get("PREMIUM") == 'True'
 logging.basicConfig(level=logging.INFO)
 logging.info("PREMIUM: " + str(PREMIUM))
 
+session_dir = "/app/sessions"
+os.makedirs(session_dir, exist_ok=True)
+
 if PREMIUM:
-    app_user = Client("app_user")
-app = Client("ytdl-main", api_id=api_id, api_hash=api_hash, bot_token=bot_token)
+    app_user = Client("app_user", workdir=session_dir)
+app = Client("ytdl-main", api_id=api_id, api_hash=api_hash, bot_token=bot_token, workdir=session_dir)
 # Only authenticated users can use the bot and enter the account ID.
 authorized_users_env = os.environ.get("AUTHORIZED_USERS")
 
