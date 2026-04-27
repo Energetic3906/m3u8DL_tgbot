@@ -149,6 +149,7 @@ def ytdlp_download(url: str, savedir: str, custom_title: str = None, cookie_file
 
         cmd.append(url)
 
+        logging.info(f"yt-dlp cmd: {' '.join(cmd)}")
         logging.info(f"yt-dlp downloading: {url}")
 
         # Stream output in real-time (like ytdl_download does for N_m3u8DL-RE)

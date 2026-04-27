@@ -116,13 +116,15 @@ https://example.com/video.m3u8,我的视频标题,https://youtube.com/shorts/xxx
 
 def process_download_task(chat_id, bot_msg, download_url, save_dir, custom_title, display_url, is_premium, skip_ytdlp=False):
     """Execute download in thread pool."""
+    logging.info(f"Starting download task: url={download_url}, skip_ytdlp={skip_ytdlp}")
     try:
         if is_premium:
             download_and_upload_video(app_user, None, bot_msg, download_url, save_dir, custom_title, display_url, is_premium=True, skip_ytdlp=skip_ytdlp)
         else:
             download_and_upload_video(app, None, bot_msg, download_url, save_dir, custom_title, display_url, is_premium=False, skip_ytdlp=skip_ytdlp)
+        logging.info(f"Download task completed: url={download_url}")
     except Exception as e:
-        logging.error(f"Download failed: {e}")
+        logging.error(f"Download task failed: {e}")
 
 
 @app.on_message(filters.incoming & (filters.text | filters.document))
