@@ -10,7 +10,7 @@ import random
 import tempfile
 import fakeredis
 from pathlib import Path
-from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
+from pyrogram.types import Message
 from pyrogram import Client, filters, types, enums
 from io import StringIO
 from tqdm import tqdm
@@ -45,8 +45,6 @@ def download_and_upload_video(user_client, client, message, user_message, base_s
             except Exception as e:
                 raise Exception(f"Both yt-dlp and N_m3u8DL-RE failed.\n\nyt-dlp error: {error_msg}\n\nN_m3u8DL-RE error: {e}")
 
-        markup = gen_video_markup()
-
         for video_path in video_paths:
             video_path_str = str(video_path)
             print("video_paths: ", video_path_str)
@@ -59,7 +57,6 @@ def download_and_upload_video(user_client, client, message, user_message, base_s
                 caption=cap,
                 progress=upload_hook,
                 progress_args=(message,),
-                reply_markup=markup,
                 **meta
             )
 
@@ -310,14 +307,3 @@ def edit_text(bot_msg, text: str):
         bot_msg.edit_text(text)
 
 
-def gen_video_markup():
-    markup = InlineKeyboardMarkup(
-        [
-            [
-                InlineKeyboardButton(
-                    "convert to audio", callback_data="convert"
-                )
-            ]
-        ]
-    )
-    return markup
