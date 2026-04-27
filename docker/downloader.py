@@ -1,4 +1,5 @@
 import os
+import shutil
 import logging
 import subprocess
 import pathlib
@@ -88,22 +89,39 @@ def ytdl_download(url: str, savedir: str):
         # Get the downloaded file list
         video_paths = list(pathlib.Path(savedir).glob("*"))
 
+        # Filter out subtitle files and other non-video files
+        video_extensions = {'.mp4', '.mkv', '.avi', '.mov', '.flv', '.wmv', '.webm', '.ts', '.m4v'}
+        subtitle_extensions = {'.srt', '.vtt', '.ass', '.ssa', '.sub'}
+        final_video_paths = []
+
         for video_path in video_paths:
+            ext = video_path.suffix.lower()
+            # Skip subtitle files
+            if ext in subtitle_extensions:
+                print(f"[SKIP] Subtitle file: {video_path}")
+                continue
             # Check if the file is already in MP4 format
-            if video_path.suffix.lower() != ".mp4":
+            if ext == ".mp4":
+                final_video_paths.append(video_path)
+            else:
+                # Convert non-MP4 video to MP4
                 new_file_path = video_path.with_suffix(".mp4")
-                # Build FFmpeg command for video format conversion
-                subprocess.run(["ffmpeg", "-i", video_path, "-c:v", "copy", "-c:a", "copy", new_file_path], check=True)
-                # Delete the original non-MP4 format video
+                print(f"[CONVERT] {video_path} -> {new_file_path}")
+                result = subprocess.run(
+                    ["ffmpeg", "-i", str(video_path), "-c:v", "copy", "-c:a", "copy", str(new_file_path)],
+                    capture_output=True,
+                    text=True
+                )
+                if result.returncode != 0:
+                    print(f"[ERROR] FFmpeg failed: {result.stderr}")
+                    raise Exception(f"FFmpeg conversion failed for {video_path}")
                 video_path.unlink()
-                # Update the video_paths list
-                video_paths.remove(video_path)  # Remove the deleted file from the list
-                video_paths.append(new_file_path)  # Add the converted MP4 file
+                final_video_paths.append(new_file_path)
 
         # Test code: print downloaded video file list
-        for video_path in video_paths:
+        for video_path in final_video_paths:
             print(f"Download completed: {video_path}")
-        return video_paths
+        return final_video_paths
     except Exception as e:
         raise Exception(f" N_m3u8DL Download failed for m3u8 URL: {url} - {str(e)}")
 
