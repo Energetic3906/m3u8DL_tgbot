@@ -78,10 +78,9 @@ def ytdl_download(url: str, savedir: str):
             url,
             "--tmp-dir", tempdir,
             "--save-dir", savedir,
-            "--save-name", random_save_name,  # Use a randomly generated UUID as the save file name
+            "--save-name", random_save_name,
             "--no-log",
-            "--auto-select",
-            "--binary-merge"
+            "--auto-select"
         ]
         print("N_m3u8DL is being used to download videos in m3u8 format: ", url)
         # Execute download command

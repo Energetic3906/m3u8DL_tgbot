@@ -25,7 +25,8 @@ def init_sessions():
             "ytdl-main",
             api_id=api_id,
             api_hash=api_hash,
-            bot_token=os.environ.get("TOKEN")
+            bot_token=os.environ.get("TOKEN"),
+            workdir=session_dir
         )
         app.start()
         app.stop()
@@ -44,7 +45,8 @@ def init_sessions():
                 "app_user",
                 api_id=api_id,
                 api_hash=api_hash,
-                phone_number=phone
+                phone_number=phone,
+                workdir=session_dir
             )
             app_user.start()
             app_user.stop()
