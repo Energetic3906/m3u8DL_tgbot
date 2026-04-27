@@ -16,7 +16,7 @@ from io import StringIO
 from tqdm import tqdm
 
 
-def download_and_upload_video(user_client, client, message, user_message, base_save_dir, custom_title=None, display_url=None, is_premium=False):
+def download_and_upload_video(user_client, client, message, user_message, base_save_dir, custom_title=None, display_url=None, is_premium=False, skip_ytdlp=False):
     chat_id = message.chat.id
 
     # Use display_url for caption if provided, otherwise use user_message
@@ -30,25 +30,29 @@ def download_and_upload_video(user_client, client, message, user_message, base_s
     try:
         save_dir = tempfile.mkdtemp(dir=base_save_dir)
 
-        # Try yt-dlp first, fallback to N_m3u8DL-RE
-        video_paths = None
-        error_msg = None
+        # If skip_ytdlp is True (m3u8 direct), use N_m3u8DL-RE directly
+        if skip_ytdlp:
+            logging.info(f"Using N_m3u8DL-RE directly for m3u8 URL: {user_message}")
+            video_paths = ytdl_download(user_message, save_dir, custom_title)
+        else:
+            # Try yt-dlp first, fallback to N_m3u8DL-RE
+            video_paths = None
+            error_msg = None
 
-        # Try yt-dlp first
-        try:
-            video_paths = ytdlp_download(user_message, save_dir, custom_title)
-            logging.info(f"Downloaded using yt-dlp: {user_message}")
-        except Exception as e:
-            logging.warning(f"yt-dlp failed, trying N_m3u8DL-RE: {e}")
-            error_msg = str(e)
-
-        # Fallback to N_m3u8DL-RE if yt-dlp didn't work
-        if not video_paths:
             try:
-                video_paths = ytdl_download(user_message, save_dir, custom_title)
-                logging.info(f"Downloaded using N_m3u8DL-RE: {user_message}")
+                video_paths = ytdlp_download(user_message, save_dir, custom_title)
+                logging.info(f"Downloaded using yt-dlp: {user_message}")
             except Exception as e:
-                raise Exception(f"Both yt-dlp and N_m3u8DL-RE failed.\n\nyt-dlp error: {error_msg}\n\nN_m3u8DL-RE error: {e}")
+                logging.warning(f"yt-dlp failed, trying N_m3u8DL-RE: {e}")
+                error_msg = str(e)
+
+            # Fallback to N_m3u8DL-RE if yt-dlp didn't work
+            if not video_paths:
+                try:
+                    video_paths = ytdl_download(user_message, save_dir, custom_title)
+                    logging.info(f"Downloaded using N_m3u8DL-RE: {user_message}")
+                except Exception as e:
+                    raise Exception(f"Both yt-dlp and N_m3u8DL-RE failed.\n\nyt-dlp error: {error_msg}\n\nN_m3u8DL-RE error: {e}")
 
         for video_path in video_paths:
             file_size = video_path.stat().st_size
@@ -62,21 +66,22 @@ def download_and_upload_video(user_client, client, message, user_message, base_s
             video_path_str = str(video_path)
             print("video_paths: ", video_path_str)
             cap, meta = gen_cap(message, caption_url, video_path_str, custom_title)
-            video_path_str = str(video_path)
-            print("video_paths: ", video_path_str)
-            cap, meta = gen_cap(message, caption_url, video_path_str, custom_title)
             print("cap: ", cap)
             print("meta: ", meta)
-            user_client.send_video(
-                chat_id,
-                video_path_str,
-                caption=cap,
-                progress=upload_hook,
-                progress_args=(message,),
-                **meta
-            )
 
-        message.edit_text(f"Download success!✅✅✅")
+            # Send video
+            if user_client:
+                user_client.send_video(
+                    chat_id,
+                    video_path_str,
+                    caption=cap,
+                    progress=upload_hook,
+                    progress_args=(message,),
+                    **meta
+                )
+
+        if message:
+            message.edit_text(f"Download success!✅✅✅")
 
         # Cleanup
         for item in os.listdir(save_dir):

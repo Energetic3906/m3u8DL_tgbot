@@ -1,9 +1,13 @@
 import os
 import logging
 import pathlib
+import shutil
+from concurrent.futures import ThreadPoolExecutor
 from pyrogram import Client, filters, types, enums
 from downloader import download_and_upload_video
-from webpage import is_ytdlp_supported
+
+# Thread pool for parallel downloads
+download_executor = ThreadPoolExecutor(max_workers=3)
 
 def cleanup_stray_sessions():
     """Remove stray session directories from /app/ root (not in /app/sessions/)"""
@@ -18,7 +22,6 @@ def cleanup_stray_sessions():
 
 def cleanup_cache():
     """Clean up download cache directories."""
-    import shutil
     cache_paths = [
         "/tmp/m3u8D/cache",
         "/tmp/m3u8D/downloading"
@@ -38,6 +41,7 @@ def cleanup_cache():
                 logging.info(f"Cache cleaned: {cache_path}")
             except Exception as e:
                 logging.warning(f"Failed to clean {cache_path}: {e}")
+
 
 # Initialize the Pyrogram client
 api_id = os.environ.get("APP_ID")
@@ -109,6 +113,17 @@ https://example.com/video.m3u8,我的视频标题,https://youtube.com/shorts/xxx
     client.send_message(message.chat.id, help_text, disable_web_page_preview=True)
 
 
+def process_download_task(chat_id, bot_msg, download_url, save_dir, custom_title, display_url, is_premium, skip_ytdlp=False):
+    """Execute download in thread pool."""
+    try:
+        if is_premium:
+            download_and_upload_video(app_user, None, bot_msg, download_url, save_dir, custom_title, display_url, is_premium=True, skip_ytdlp=skip_ytdlp)
+        else:
+            download_and_upload_video(app, None, bot_msg, download_url, save_dir, custom_title, display_url, is_premium=False, skip_ytdlp=skip_ytdlp)
+    except Exception as e:
+        logging.error(f"Download failed: {e}")
+
+
 @app.on_message(filters.incoming & (filters.text | filters.document))
 def handle_message(client: Client, message: types.Message):
     chat_id = message.from_user.id
@@ -123,19 +138,21 @@ def handle_message(client: Client, message: types.Message):
     download_url = None
     custom_title = None
     display_url = None
+    is_m3u8_direct = False
 
     parts = user_message.split(",")
     if len(parts) >= 3:
         # format: download_url,name,display_url
         potential_download_url = parts[0].strip()
         potential_title = parts[1].strip()
-        potential_display_url = ",".join(parts[2:]).strip()  # handle URLs with commas
+        potential_display_url = ",".join(parts[2:]).strip()
 
         if potential_download_url.startswith("https://") or potential_download_url.startswith("http://"):
             download_url = potential_download_url
             custom_title = potential_title
             display_url = potential_display_url
-            logging.info(f"Custom format: download='{download_url}', title='{custom_title}', display='{display_url}'")
+            is_m3u8_direct = ".m3u8" in potential_download_url.lower()
+            logging.info(f"Custom format: download='{download_url}', title='{custom_title}', display='{display_url}', is_m3u8={is_m3u8_direct}")
 
     # If not custom format, use standard URL handling
     if not download_url:
@@ -145,9 +162,10 @@ def handle_message(client: Client, message: types.Message):
 
         download_url = user_message
 
-        # If it's a direct m3u8 URL, use it directly
+        # If it's a direct m3u8 URL, skip yt-dlp and use N_m3u8DL-RE directly
         if ".m3u8" in user_message.lower():
-            logging.info(f"Direct m3u8 URL detected: {user_message}")
+            is_m3u8_direct = True
+            logging.info(f"Direct m3u8 URL detected: {user_message} - using N_m3u8DL-RE directly")
         else:
             # Try to use yt-dlp to get video info
             logging.info(f"Checking with yt-dlp: {user_message}")
@@ -158,26 +176,38 @@ def handle_message(client: Client, message: types.Message):
                 logging.info(f"yt-dlp found: {title}")
 
                 if m3u8_url:
+                    # If yt-dlp found m3u8 URL, use N_m3u8DL-RE directly
                     download_url = m3u8_url
-                    logging.info(f"yt-dlp extracted m3u8 URL: {m3u8_url}")
+                    is_m3u8_direct = True
+                    logging.info(f"yt-dlp extracted m3u8 URL: {m3u8_url} - using N_m3u8DL-RE")
+                else:
+                    # yt-dlp found title but no direct m3u8, use yt-dlp to download
+                    is_m3u8_direct = False
+                    logging.info(f"Using yt-dlp to download: {user_message}")
             else:
-                logging.info(f"yt-dlp not supported, trying N_m3u8DL-RE: {user_message}")
+                logging.info(f"yt-dlp not supported, using N_m3u8DL-RE: {user_message}")
 
     save_dir = "/tmp/m3u8D/cache"
     os.makedirs(save_dir, exist_ok=True)
 
-    # Start download
+    # Start download (non-blocking with thread pool)
     text = "Your task was added to active queue.\nProcessing...\n\n"
     bot_msg = message.reply_text(text, quote=True)
 
-    try:
-        if PREMIUM:
-            download_and_upload_video(app_user, client, bot_msg, download_url, save_dir, custom_title, display_url, is_premium=True)
-        else:
-            download_and_upload_video(app, client, bot_msg, download_url, save_dir, custom_title, display_url, is_premium=False)
-    except Exception as e:
-        logging.error(f"Download failed: {e}")
-        client.send_message(chat_id, f"Download failed: {str(e)}")
+    # Submit to thread pool for parallel processing
+    download_executor.submit(
+        process_download_task,
+        chat_id,
+        bot_msg,
+        download_url,
+        save_dir,
+        custom_title,
+        display_url,
+        PREMIUM,
+        is_m3u8_direct
+    )
+
+    client.send_message(chat_id, f"Task submitted! Download will start shortly.")
 
 
 # Start client
