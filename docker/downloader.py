@@ -168,23 +168,42 @@ def ytdlp_download(url: str, savedir: str, custom_title: str = None, cookie_file
                 target_size = max_size_bytes
                 one_gb = 1024 * 1024 * 1024
 
-                # Find best format
+                # Find best format - prefer combined formats (have both video and audio)
                 best_format = None
                 best_height = 0
                 for fmt in formats:
                     height = fmt.get('height', 0)
                     filesize = fmt.get('filesize') or fmt.get('fsize') or 0
+                    vcodec = fmt.get('vcodec', 'none')
+                    acodec = fmt.get('acodec', 'none')
+                    # Prefer formats that already have both video and audio (combined container)
+                    has_video = vcodec and vcodec != 'none'
+                    has_audio = acodec and acodec != 'none'
+                    is_combined = has_video and has_audio
+
                     if height and filesize > 0:
-                        if best_format is None or height > best_height:
+                        if best_format is None:
                             best_format = fmt
                             best_height = height
+                        elif height > best_height:
+                            # Prefer higher resolution, but favor combined formats at same height
+                            if height == best_height and is_combined:
+                                best_format = fmt
+                            elif height > best_height:
+                                best_format = fmt
+                                best_height = height
 
                 if best_format:
-                    expected_filesize = best_format.get('filesize') or best_format.get('fsize') or 0
-                    expected_bitrate = best_format.get('tbr', 0) * 1000  # Convert kbps to bps
+                    # Estimate combined size: video_filesize + audio_overhead
+                    # Audio typically adds 1-2MB per minute at 128kbps
+                    video_filesize = best_format.get('filesize') or best_format.get('fsize') or 0
+                    duration = video_info.get('duration', 0)
+                    audio_overhead = int(duration * 128 * 1024 / 8) if duration else 20 * 1024 * 1024  # ~20MB default
+                    container_overhead = int(video_filesize * 0.02)  # 2% container overhead
+                    expected_filesize = video_filesize + audio_overhead + container_overhead
                     size_diff = expected_filesize - target_size
 
-                    logging.info(f"Best format: height={best_height}, filesize={expected_filesize / (1024*1024):.1f}MB, target={target_size / (1024*1024):.1f}MB, diff={size_diff / (1024*1024):.1f}MB")
+                    logging.info(f"Best format: height={best_height}, video_size={video_filesize / (1024*1024):.1f}MB, expected_total={expected_filesize / (1024*1024):.1f}MB, target={target_size / (1024*1024):.1f}MB")
 
                     if size_diff > one_gb:
                         # 超过1GB，降分辨率
@@ -195,13 +214,14 @@ def ytdlp_download(url: str, savedir: str, custom_title: str = None, cookie_file
                             h = fmt.get('height', 0)
                             fs = fmt.get('filesize') or fmt.get('fsize') or 0
                             vcodec = fmt.get('vcodec', 'none')
-                            acodec = fmt.get('acodec', 'none')
-                            # Check if this format has video and fits size limit
-                            if h == target_height and fs > 0 and fs <= target_size and vcodec != 'none':
-                                format_selector = f"bestvideo[height={h}]+bestaudio/best[height={h}]"
-                                expected_filesize = fs
-                                logging.info(f"Downgrade to height={h}, size={fs / (1024*1024):.1f}MB")
-                                break
+                            # Only consider video formats with estimated total under limit
+                            if h == target_height and fs > 0 and vcodec != 'none':
+                                est_total = fs + (audio_overhead + container_overhead)
+                                if est_total <= target_size:
+                                    format_selector = f"bestvideo[height={h}]+bestaudio/best[height={h}]"
+                                    expected_filesize = est_total
+                                    logging.info(f"Downgrade to height={h}, estimated_total={est_total / (1024*1024):.1f}MB")
+                                    break
 
                         if not format_selector:
                             # 没找到合适分辨率，用--max-filesize让yt-dlp自动选
@@ -419,7 +439,7 @@ def compress_video(video_path: Path, max_size_bytes: int, is_premium: bool):
     # Get video metadata
     probe_cmd = [
         "ffprobe", "-v", "quiet", "-print_format", "json",
-        "-show_format", str(video_path)
+        "-show_format", "-show_streams", str(video_path)
     ]
     result = subprocess.run(probe_cmd, capture_output=True, text=True)
     if result.returncode != 0:
@@ -435,6 +455,26 @@ def compress_video(video_path: Path, max_size_bytes: int, is_premium: bool):
 
     if duration <= 0:
         logging.warning(f"Could not get duration for {video_path}, skipping compression")
+        return video_path
+
+    # Extract width and height from video stream
+    width = 1280
+    height = 720
+    is_10bit = False
+
+    for stream in info.get("streams", []):
+        if stream.get("codec_type") == "video":
+            width = stream.get("width", 1280)
+            height = stream.get("height", 720)
+            pix_fmt = stream.get("pix_fmt", "")
+            if "10le" in pix_fmt or "10bit" in pix_fmt:
+                is_10bit = True
+                logging.info(f"Detected 10-bit input, will convert to 8-bit")
+            break
+
+    # If no video stream found, skip compression
+    if width == 0 or height == 0:
+        logging.warning(f"No video stream found in {video_path}, skipping compression")
         return video_path
 
     # Target size with 10% buffer for container/metadata overhead
@@ -459,25 +499,6 @@ def compress_video(video_path: Path, max_size_bytes: int, is_premium: bool):
 
     # Create output path
     output_path = video_path.with_suffix(".compressed.mp4")
-
-    # Check if input is 10-bit (need conversion for libx264)
-    is_10bit = False
-    try:
-        probe_cmd = [
-            "ffprobe", "-v", "quiet", "-print_format", "json",
-            "-select_streams", "v:0", "-show_streams", str(video_path)
-        ]
-        result = subprocess.run(probe_cmd, capture_output=True, text=True, timeout=30)
-        if result.returncode == 0:
-            info = json.loads(result.stdout)
-            for stream in info.get("streams", []):
-                pix_fmt = stream.get("pix_fmt", "")
-                if "10le" in pix_fmt or "10bit" in pix_fmt or "10bit" in str(stream):
-                    is_10bit = True
-                    logging.info(f"Detected 10-bit input, will convert to 8-bit")
-                    break
-    except Exception as e:
-        logging.warning(f"Could not detect bit depth: {e}")
 
     # Build video filter for 10-bit conversion
     # Use format filter to convert 10-bit to 8-bit yuv420p, scale for dimensions
