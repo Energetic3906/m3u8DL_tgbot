@@ -182,15 +182,23 @@ def ytdl_download(url: str, savedir: str, custom_title: str = None):
 
 def convert_to_mp4(video_paths):
     """Convert non-MP4 video files to MP4."""
-    video_extensions = {'.mp4', '.mkv', '.avi', '.mov', '.flv', '.wmv', '.webm', '.ts', '.m4v'}
-    subtitle_extensions = {'.srt', '.vtt', '.ass', '.ssa', '.sub'}
+    skip_extensions = {'.srt', '.vtt', '.ass', '.ssa', '.sub', '.part', '.ytdl', '.tmp'}
     final_video_paths = []
 
     for video_path in video_paths:
         ext = video_path.suffix.lower()
-        if ext in subtitle_extensions:
-            print(f"[SKIP] Subtitle file: {video_path}")
+        name = video_path.name.lower()
+
+        # Skip subtitle and partial/temporary files
+        if ext in skip_extensions or '.part' in name or '.ytdl' in name:
+            print(f"[SKIP] Skipping: {video_path}")
             continue
+
+        # Check if file is actually complete (not .part file without extension)
+        if video_path.stat().st_size < 1000:  # Skip very small files (likely incomplete)
+            print(f"[SKIP] Too small, likely incomplete: {video_path}")
+            continue
+
         if ext == ".mp4":
             final_video_paths.append(video_path)
         else:
