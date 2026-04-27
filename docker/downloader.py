@@ -153,9 +153,24 @@ def ytdl_download(url: str, savedir: str, custom_title: str = None):
             "--save-name", save_name,
             "--auto-select"
         ]
-        print(f"N_m3u8DL-RE downloading: {url}")
-        # Use stdout=None to show progress in docker logs
-        subprocess.run(download_command, check=True)
+        logging.info(f"N_m3u8DL-RE downloading: {url}")
+
+        process = subprocess.Popen(
+            download_command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            bufsize=1,
+            text=True
+        )
+
+        for line in process.stdout:
+            line = line.strip()
+            if line:
+                logging.info(f"[N_m3u8DL-RE] {line}")
+
+        process.wait()
+        if process.returncode != 0:
+            raise Exception(f"N_m3u8DL-RE exited with code {process.returncode}")
 
         video_paths = list(pathlib.Path(savedir).glob("*"))
 
