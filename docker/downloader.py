@@ -173,7 +173,8 @@ def ytdlp_download(url: str, savedir: str, custom_title: str = None, cookie_file
                 best_height = 0
                 for fmt in formats:
                     height = fmt.get('height', 0)
-                    filesize = fmt.get('filesize') or fmt.get('fsize') or 0
+                    # Use filesize first, fallback to filesize_approx
+                    filesize = fmt.get('filesize') or fmt.get('fsize') or fmt.get('filesize_approx') or 0
                     vcodec = fmt.get('vcodec', 'none')
                     acodec = fmt.get('acodec', 'none')
                     # Prefer formats that already have both video and audio (combined container)
@@ -196,10 +197,10 @@ def ytdlp_download(url: str, savedir: str, custom_title: str = None, cookie_file
                 if best_format:
                     # Estimate combined size: video_filesize + audio_overhead
                     # Audio typically adds 1-2MB per minute at 128kbps
-                    video_filesize = best_format.get('filesize') or best_format.get('fsize') or 0
+                    video_filesize = best_format.get('filesize') or best_format.get('fsize') or best_format.get('filesize_approx') or 0
                     duration = video_info.get('duration', 0)
                     audio_overhead = int(duration * 128 * 1024 / 8) if duration else 20 * 1024 * 1024  # ~20MB default
-                    container_overhead = int(video_filesize * 0.02)  # 2% container overhead
+                    container_overhead = int(video_filesize * 0.02) if video_filesize else 0  # 2% container overhead
                     expected_filesize = video_filesize + audio_overhead + container_overhead
                     size_diff = expected_filesize - target_size
 
@@ -212,7 +213,7 @@ def ytdlp_download(url: str, savedir: str, custom_title: str = None, cookie_file
 
                         for fmt in formats:
                             h = fmt.get('height', 0)
-                            fs = fmt.get('filesize') or fmt.get('fsize') or 0
+                            fs = fmt.get('filesize') or fmt.get('fsize') or fmt.get('filesize_approx') or 0
                             vcodec = fmt.get('vcodec', 'none')
                             # Only consider video formats with estimated total under limit
                             if h == target_height and fs > 0 and vcodec != 'none':
