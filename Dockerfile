@@ -7,6 +7,10 @@ COPY docker /tmp/app
 
 RUN chmod +x /tmp/app/N_m3u8DL-RE /tmp/app/entry.sh
 
+# Install deno for yt-dlp YouTube extraction
+RUN curl -fsSL https://deno.land/install.sh | sh && \
+    ln -s /root/.deno/bin/deno /usr/local/bin/deno
+
 # 最终阶段
 FROM python:3.11-slim
 

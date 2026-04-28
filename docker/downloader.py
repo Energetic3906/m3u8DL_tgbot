@@ -161,7 +161,6 @@ def ytdlp_download(url: str, savedir: str, custom_title: str = None, cookie_file
         # Get video info for duration and format selection
         info_cmd = [
             "python3", "-m", "yt_dlp",
-            "--js-runtimes", "node",
             "--dump-json",
             "--no-playlist",
             "--no-warnings",
@@ -225,7 +224,6 @@ def ytdlp_download(url: str, savedir: str, custom_title: str = None, cookie_file
         # Download with format selector
         cmd = [
             "python3", "-m", "yt_dlp",
-            "--js-runtimes", "node",
             "-f", format_selector,
             "-o", f"{output_path}.%(ext)s",
             "--no-playlist",
