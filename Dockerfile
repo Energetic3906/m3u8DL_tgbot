@@ -18,7 +18,7 @@ COPY --from=builder /root/.local /usr/local
 COPY --from=builder /tmp/app .
 # 安装依赖
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends --no-install-suggests ffmpeg libicu-dev && \
+    apt-get install -y --no-install-recommends --no-install-suggests ffmpeg libicu-dev nodejs && \
     rm -rf /var/lib/apt/lists/* && \
     apt-get clean && \
     rm -rf /var/cache/apt/archives/*
