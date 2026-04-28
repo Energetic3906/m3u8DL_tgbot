@@ -139,7 +139,7 @@ def ytdlp_download(url: str, savedir: str, custom_title: str = None, cookie_file
     output_path = os.path.join(savedir, save_name)
 
     try:
-        # Get video duration for logging
+        # Get video info for duration and format selection
         info_cmd = [
             "python3", "-m", "yt_dlp",
             "--dump-json",
@@ -154,29 +154,61 @@ def ytdlp_download(url: str, savedir: str, custom_title: str = None, cookie_file
         info_result = subprocess.run(info_cmd, capture_output=True, text=True, timeout=60)
 
         duration = 0
+        format_selector = "best"  # default
         if info_result.returncode == 0 and info_result.stdout:
             video_info = json.loads(info_result.stdout)
             duration = video_info.get('duration', 0)
 
-        # Use --max-filesize to let yt-dlp automatically select the best format
-        # that fits within the limit. This is more reliable than our format
-        # matching which can be inaccurate due to YouTube's estimated sizes.
-        format_selector = None
-        if max_size_bytes:
-            size_gb = (max_size_bytes * 0.9) / (1024**3)  # 10% buffer
-            format_selector = f"--max-filesize {size_gb:.2f}G"
-            logging.info(f"Using --max-filesize={size_gb:.2f}G for {duration:.0f}s video")
+            # Estimate file size based on duration and typical bitrates
+            # Use filesize_approx if available, otherwise estimate
+            filesize_approx = video_info.get('filesize_approx') or video_info.get('filesize')
+            if not filesize_approx and duration > 0:
+                # Rough estimation: 1080p ~ 5Mbps, 720p ~ 2.5Mbps, etc
+                formats = video_info.get('formats', [])
+                # Find best video format to estimate bitrate
+                best_video = None
+                for f in formats:
+                    if f.get('vcodec') != 'none' and f.get('acodec') != 'none':
+                        if best_video is None or f.get('tbr', 0) > best_video.get('tbr', 0):
+                            best_video = f
+                if best_video:
+                    tbr = best_video.get('tbr', 0)
+                    if tbr > 0:
+                        filesize_approx = int(tbr * 1000 * duration / 8)  # bits to bytes
 
-        # Download
+            # Resolution downgrade if estimated size exceeds Telegram limit
+            # Regular: 2GB, Premium: 4GB
+            if filesize_approx and filesize_approx > max_size_bytes:
+                height = 0
+                for f in video_info.get('formats', []):
+                    if f.get('height'):
+                        height = max(height, f.get('height', 0))
+
+                size_limit_gb = max_size_bytes / (1024**3)
+                logging.info(f"Estimated size {filesize_approx / (1024**3):.2f}GB > limit {size_limit_gb:.0f}GB, checking resolution downgrade")
+
+                # Build fallback chain with filesize constraint
+                # Try highest quality within limit, fallback to lower resolutions
+                if height >= 2160:
+                    # 4K+ source: try 2K first, then 1080p, then 720p
+                    format_selector = f"bv[height<=2160][filesize<{size_limit_gb:.0f}G]+ba/b[height<=2160][filesize<{size_limit_gb:.0f}G] / bv[height<=1080][filesize<{size_limit_gb:.0f}G]+ba/b[height<=1080][filesize<{size_limit_gb:.0f}G] / bv[height<=720][filesize<{size_limit_gb:.0f}G]+ba/b[height<=720][filesize<{size_limit_gb:.0f}G] / bv+ba"
+                    logging.info(f"Downgrading from 4K+ to 2K/1080p/720p with filesize<{size_limit_gb:.0f}G")
+                elif height >= 1440:
+                    # 2K source: try 1080p first, then 720p
+                    format_selector = f"bv[height<=1080][filesize<{size_limit_gb:.0f}G]+ba/b[height<=1080][filesize<{size_limit_gb:.0f}G] / bv[height<=720][filesize<{size_limit_gb:.0f}G]+ba/b[height<=720][filesize<{size_limit_gb:.0f}G] / bv+ba"
+                    logging.info(f"Downgrading from 2K to 1080p/720p with filesize<{size_limit_gb:.0f}G")
+                else:
+                    # 1080p or lower: try 720p
+                    format_selector = f"bv[height<=720][filesize<{size_limit_gb:.0f}G]+ba/b[height<=720][filesize<{size_limit_gb:.0f}G] / bv+ba"
+                    logging.info(f"Downgrading to 720p with filesize<{size_limit_gb:.0f}G")
+
+        # Download with format selector
         cmd = [
             "python3", "-m", "yt_dlp",
+            "-f", format_selector,
             "-o", f"{output_path}.%(ext)s",
             "--no-playlist",
         ]
-
-        if format_selector:
-            parts = format_selector.split()
-            cmd.extend(parts)
 
         if cookie_file:
             cmd.extend(["--cookies", cookie_file])
