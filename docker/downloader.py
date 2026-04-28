@@ -62,10 +62,29 @@ def download_and_upload_video(user_client, client, message, user_message, base_s
             file_size = video_path.stat().st_size
             logging.info(f"File size: {file_size / (1024*1024):.2f}MB, limit: {size_limit / (1024*1024*1024):.1f}GB")
 
-            # Compress if file exceeds size limit
+            # Split if file exceeds size limit
             if file_size > size_limit:
-                logging.info(f"File exceeds limit, compressing...")
-                video_path = compress_video(video_path, size_limit, is_premium)
+                logging.info(f"File exceeds limit, splitting...")
+                split_paths = split_video(video_path, size_limit, custom_title)
+                # Loop through split parts for upload
+                for i, split_path in enumerate(split_paths, 1):
+                    split_size = split_path.stat().st_size
+                    logging.info(f"Split part {i}/{len(split_paths)}: {split_size / (1024*1024):.2f}MB")
+
+                    split_path_str = str(split_path)
+                    cap, meta = gen_cap(message, caption_url, split_path_str, custom_title, part_num=i, total_parts=len(split_paths))
+
+                    if user_client:
+                        user_client.send_video(
+                            chat_id,
+                            split_path_str,
+                            caption=cap,
+                            progress=upload_hook,
+                            progress_args=(message,),
+                            **meta
+                        )
+                # Done with this video (already split and uploaded), continue to next
+                continue
 
             video_path_str = str(video_path)
             print("video_paths: ", video_path_str)
@@ -340,30 +359,20 @@ def convert_to_mp4(video_paths):
     return final_video_paths
 
 
-def compress_video(video_path: Path, max_size_bytes: int, is_premium: bool):
+def split_video(video_path: Path, max_size_bytes: int, custom_title: str = None):
     """
-    Compress video to fit within max_size_bytes using FFmpeg.
-    Calculates target bitrate based on duration and target size.
+    Split video into multiple parts if it exceeds max_size_bytes.
+    Uses -c copy (stream copy) for minimal CPU usage.
     """
-    import math
-
-    # Show video info before compression
-    logging.info(f"[COMPRESS] Video info before compression:")
-    ffprobe_info_cmd = ["ffmpeg", "-i", str(video_path)]
-    info_result = subprocess.run(ffprobe_info_cmd, capture_output=True, text=True)
-    for line in info_result.stdout.split('\n') + info_result.stderr.split('\n'):
-        if line.strip():
-            logging.info(f"  {line}")
-
-    # Get video metadata
+    # Get video info and duration
     probe_cmd = [
         "ffprobe", "-v", "quiet", "-print_format", "json",
         "-show_format", "-show_streams", str(video_path)
     ]
     result = subprocess.run(probe_cmd, capture_output=True, text=True)
     if result.returncode != 0:
-        logging.warning(f"ffprobe failed for {video_path}, skipping compression")
-        return video_path
+        logging.warning(f"ffprobe failed for {video_path}, skipping split")
+        return [video_path]
 
     info = json.loads(result.stdout)
     duration_str = info.get("format", {}).get("duration", "0")
@@ -373,130 +382,73 @@ def compress_video(video_path: Path, max_size_bytes: int, is_premium: bool):
         duration = 0
 
     if duration <= 0:
-        logging.warning(f"Could not get duration for {video_path}, skipping compression")
-        return video_path
+        logging.warning(f"Could not get duration for {video_path}, skipping split")
+        return [video_path]
 
-    # Extract width and height from video stream
-    width = 1280
-    height = 720
-    is_10bit = False
+    # Show video info before split
+    logging.info(f"[SPLIT] Video info before split:")
+    ffprobe_info_cmd = ["ffmpeg", "-i", str(video_path)]
+    info_result = subprocess.run(ffprobe_info_cmd, capture_output=True, text=True)
+    for line in info_result.stdout.split('\n') + info_result.stderr.split('\n'):
+        if line.strip():
+            logging.info(f"  {line}")
 
-    for stream in info.get("streams", []):
-        if stream.get("codec_type") == "video":
-            width = stream.get("width", 1280)
-            height = stream.get("height", 720)
-            pix_fmt = stream.get("pix_fmt", "")
-            if "10le" in pix_fmt or "10bit" in pix_fmt:
-                is_10bit = True
-                logging.info(f"Detected 10-bit input, will convert to 8-bit")
-            break
+    file_size = video_path.stat().st_size
+    num_parts = int(file_size / max_size_bytes) + 1
+    logging.info(f"File size {file_size / (1024**3):.2f}GB, limit {max_size_bytes / (1024**3):.0f}GB, splitting into {num_parts} parts")
 
-    # If no video stream found, skip compression
-    if width == 0 or height == 0:
-        logging.warning(f"No video stream found in {video_path}, skipping compression")
-        return video_path
+    part_duration = duration / num_parts
+    video_paths = []
+    parent_dir = video_path.parent
+    stem = video_path.stem
 
-    # Target size with 10% buffer for container/metadata overhead
-    target_size = max_size_bytes * 0.9
+    for i in range(num_parts):
+        start_time = i * part_duration
+        output_path = parent_dir / f"{stem}-part{i+1}.mp4"
 
-    # Audio bitrate (keep original audio)
-    audio_bitrate = 128 * 1024  # 128kbps
+        logging.info(f"[SPLIT] Creating part {i+1}/{num_parts}: {output_path}")
+        logging.info(f"[SPLIT] Time range: {start_time:.1f}s to {(i+1) * part_duration:.1f}s")
 
-    # Calculate video bitrate
-    # target_size (bytes) = video_bitrate (bytes/s) * duration (s) + audio_bitrate * duration
-    # video_bitrate = (target_size / duration) - audio_bitrate
-    video_bitrate_bps = (target_size / duration) - audio_bitrate
-    video_bitrate_kbps = math.floor(video_bitrate_bps / 1024)
-
-    # Minimum bitrate check (don't go too low)
-    min_bitrate_kbps = 500
-    if video_bitrate_kbps < min_bitrate_kbps:
-        logging.warning(f"Calculated bitrate too low ({video_bitrate_kbps}kbps), using minimum {min_bitrate_kbps}kbps")
-        video_bitrate_kbps = min_bitrate_kbps
-
-    logging.info(f"Compressing: duration={duration:.1f}s, target_size={target_size/(1024*1024):.1f}MB, video_bitrate={video_bitrate_kbps}kbps")
-
-    # Create output path
-    output_path = video_path.with_suffix(".compressed.mp4")
-
-    # Build video filter for 10-bit conversion
-    # Use format filter to convert 10-bit to 8-bit yuv420p, scale for dimensions
-    vf_parts = []
-    if is_10bit:
-        vf_parts.append("format=yuv420p")
-    vf_parts.append(f"scale={width}:{height}:force_original_aspect_ratio=decrease")
-    vf_string = ",".join(vf_parts)
-
-    # Compress with calculated bitrate
-    compress_cmd = [
-        "ffmpeg", "-y", "-i", str(video_path),
-        "-vf", vf_string,
-        "-c:v", "libx264", "-b:v", f"{video_bitrate_kbps}k",
-        "-maxrate", f"{video_bitrate_kbps * 1.5}k", "-bufsize", f"{video_bitrate_kbps * 2}k",
-        "-c:a", "aac", "-b:a", "128k",
-        "-movflags", "+faststart",
-        str(output_path)
-    ]
-
-    logging.info(f"Running: {' '.join(compress_cmd)}")
-
-    result = subprocess.run(
-        compress_cmd,
-        capture_output=True,
-        text=True,
-        timeout=max(600, int(duration * 2))  # At least 10 min, or 2x duration
-    )
-
-    if result.returncode != 0:
-        logging.error(f"Compression failed: {result.stderr}")
-        # Try simpler compression (just CRF-based)
-        logging.info("Trying simpler compression...")
-        simple_cmd = [
+        split_cmd = [
             "ffmpeg", "-y", "-i", str(video_path),
-        ]
-        if is_10bit:
-            simple_cmd.extend(["-vf", vf_string])
-        simple_cmd.extend([
-            "-c:v", "libx264", "-crf", "28",
-            "-c:a", "aac", "-b:a", "128k",
-            "-movflags", "+faststart",
+            "-ss", str(start_time),
+            "-t", str(part_duration),
+            "-c", "copy",
+            "-avoid_negative_ts", "make_zero",
             str(output_path)
-        ])
-        result = subprocess.run(simple_cmd, capture_output=True, text=True, timeout=max(600, int(duration * 2)))
-        if result.returncode != 0:
-            logging.error(f"Simple compression also failed: {result.stderr}")
-            return video_path  # Return original if compression fails
-
-    # Check if compressed file is within limit
-    compressed_size = output_path.stat().st_size
-    if compressed_size > max_size_bytes:
-        logging.warning(f"Compressed file still too large: {compressed_size/(1024*1024):.1f}MB > {max_size_bytes/(1024*1024*1024):.1f}GB")
-        # Try more aggressive compression
-        video_bitrate_kbps = max(300, video_bitrate_kbps // 2)
-        aggressive_cmd = [
-            "ffmpeg", "-y", "-i", str(video_path),
         ]
-        if is_10bit:
-            aggressive_cmd.extend(["-vf", vf_string])
-        aggressive_cmd.extend([
-            "-c:v", "libx264", "-b:v", f"{video_bitrate_kbps}k",
-            "-maxrate", f"{video_bitrate_kbps * 1.5}k", "-bufsize", f"{video_bitrate_kbps * 2}k",
-            "-c:a", "aac", "-b:a", "96k",
-            "-movflags", "+faststart",
-            str(output_path)
-        ])
-        result = subprocess.run(aggressive_cmd, capture_output=True, text=True, timeout=max(600, int(duration * 2)))
-        if result.returncode == 0:
-            compressed_size = output_path.stat().st_size
 
-    logging.info(f"Compression complete: {compressed_size/(1024*1024):.1f}MB (was {video_path.stat().st_size/(1024*1024):.1f}MB)")
+        logging.info(f"Running: {' '.join(split_cmd)}")
 
-    # Remove original, return compressed
-    video_path.unlink()
-    return output_path
+        process = subprocess.Popen(
+            split_cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            bufsize=1,
+            text=True
+        )
+
+        for line in process.stdout:
+            line = line.strip()
+            if line:
+                if 'time=' in line:
+                    logging.info(f"[SPLIT] {line}")
+                elif 'error' in line.lower():
+                    logging.error(f"[SPLIT] {line}")
+
+        process.wait()
+        if process.returncode != 0:
+            logging.error(f"Split part {i+1} failed, keeping original")
+            # If split fails, return original file
+            return [video_path]
+
+        video_paths.append(output_path)
+
+    logging.info(f"Split complete: {len(video_paths)} parts created")
+    return video_paths
 
 
-def gen_cap(bm, url, video_path, custom_title=None):
+def gen_cap(bm, url, video_path, custom_title=None, part_num=None, total_parts=None):
     video_path = Path(video_path)
     chat_id = bm.chat.id
     user = bm.chat
@@ -526,6 +478,10 @@ def gen_cap(bm, url, video_path, custom_title=None):
         display_name = custom_title
     else:
         display_name = os.path.splitext(file_name)[0]
+
+    # Add part number if split
+    if part_num and total_parts and total_parts > 1:
+        display_name = f"{display_name}-{part_num}/{total_parts}"
 
     cap = f"{display_name}\n\n{url}\t"
     return cap, meta
