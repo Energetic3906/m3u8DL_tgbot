@@ -7,10 +7,6 @@ COPY docker /tmp/app
 
 RUN chmod +x /tmp/app/N_m3u8DL-RE /tmp/app/entry.sh
 
-# Install deno for yt-dlp YouTube extraction
-RUN curl -fsSL https://deno.land/install.sh | sh && \
-    ln -s /root/.deno/bin/deno /usr/local/bin/deno
-
 # 最终阶段
 FROM python:3.11-slim
 
@@ -20,9 +16,12 @@ WORKDIR /app
 # 从构建阶段复制依赖项
 COPY --from=builder /root/.local /usr/local
 COPY --from=builder /tmp/app .
+
 # 安装依赖
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends --no-install-suggests ffmpeg libicu-dev nodejs && \
+    apt-get install -y --no-install-recommends --no-install-suggests ffmpeg libicu-dev curl && \
+    curl -fsSL https://deno.land/install.sh | sh && \
+    ln -s /root/.deno/bin/deno /usr/local/bin/deno && \
     rm -rf /var/lib/apt/lists/* && \
     apt-get clean && \
     rm -rf /var/cache/apt/archives/*
