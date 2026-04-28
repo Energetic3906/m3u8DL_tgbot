@@ -347,6 +347,14 @@ def compress_video(video_path: Path, max_size_bytes: int, is_premium: bool):
     """
     import math
 
+    # Show video info before compression
+    logging.info(f"[COMPRESS] Video info before compression:")
+    ffprobe_info_cmd = ["ffmpeg", "-i", str(video_path)]
+    info_result = subprocess.run(ffprobe_info_cmd, capture_output=True, text=True)
+    for line in info_result.stdout.split('\n') + info_result.stderr.split('\n'):
+        if line.strip():
+            logging.info(f"  {line}")
+
     # Get video metadata
     probe_cmd = [
         "ffprobe", "-v", "quiet", "-print_format", "json",
