@@ -250,14 +250,15 @@ def ytdlp_download(url: str, savedir: str, custom_title: str = None, cookie_file
             if line:
                 logging.info(f"[yt-dlp] {line}")
 
-        process.wait()
-        if process.returncode != 0:
-            raise Exception(f"yt-dlp failed with code {process.returncode}")
-
-        # Find downloaded file
+        # Find downloaded file (check even if returncode != 0, yt-dlp may have downloaded partially)
         video_paths = list(pathlib.Path(savedir).glob(f"{save_name}.*"))
         video_paths = [p for p in video_paths if p.suffix.lower() not in {'.part', '.ytdl'}]
 
+        # If no video found AND process failed, raise error
+        if not video_paths and process.returncode != 0:
+            raise Exception(f"yt-dlp failed with code {process.returncode}")
+
+        # Even if returncode != 0, we may have a valid video file - proceed if exists
         if not video_paths:
             raise Exception("yt-dlp downloaded but no file found")
 
@@ -542,11 +543,16 @@ def sizeof_fmt(num: int, suffix="B"):
 
 
 def upload_hook(current, total, bot_msg):
+    if current is None or total is None:
+        return
     text = tqdm_progress("Uploading...", total, current)
     edit_text(bot_msg, text)
 
 
 def tqdm_progress(desc, total, finished, speed="", eta=""):
+    if finished is None:
+        finished = 0
+
     def more(title, initial):
         if initial:
             return "%s %s" % (title, initial)
@@ -579,13 +585,24 @@ def tqdm_progress(desc, total, finished, speed="", eta=""):
 
 
 r = fakeredis.FakeStrictRedis()
+_last_edit_text = {}  # Track last text per message to avoid duplicate edits
 
 
 def edit_text(bot_msg, text: str):
+    global _last_edit_text
     key = "%s-%s" % (bot_msg.chat.id, bot_msg.id)
+
+    # Skip if text is the same as last edit (avoid MESSAGE_NOT_MODIFIED)
+    if _last_edit_text.get(key) == text:
+        return
+
     if not r.exists(key):
         time.sleep(random.random())
         r.set(key, "ok", ex=3)
-        bot_msg.edit_text(text)
+        try:
+            bot_msg.edit_text(text)
+            _last_edit_text[key] = text
+        except Exception as e:
+            logging.warning(f"edit_text failed: {e}")
 
 
